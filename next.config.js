@@ -11,7 +11,7 @@ const nextConfig = {
     return config;
   },
   experimental: {
-    outputFileTracingIgnores: ['backup-*.json', '*.js']
+    outputFileTracingExcludes: ['backup-*.json', '*.js']
   }
 }
 
