@@ -1,14 +1,9 @@
-import { GetServerSideProps } from 'next';
-
 export default function Index() {
-  return <div>Redirecionando...</div>;
+  return (
+    <div>
+      <h1>Sistema de Quilometragem</h1>
+      <p>Página inicial funcionando!</p>
+      <a href="/login">Ir para Login</a>
+    </div>
+  );
 }
-
-export const getServerSideProps: GetServerSideProps = async () => {
-  return {
-    redirect: {
-      destination: '/login',
-      permanent: false,
-    },
-  };
-};
