@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { GetServerSideProps } from 'next';
 
 export default function Index() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.push('/login');
-  }, [router]);
-
   return <div>Redirecionando...</div>;
 }
+
+export const getServerSideProps: GetServerSideProps = async () => {
+  return {
+    redirect: {
+      destination: '/login',
+      permanent: false,
+    },
+  };
+};
