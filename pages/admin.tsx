@@ -572,13 +572,18 @@ export default function Admin() {
       const userIds = snapshot.docs.map((doc: any) => doc.data().uid);
       
       const response = await fetch('/api/users/get-emails', {
-        method: 'POST',
+        method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds })
+        body: JSON.stringify({ userIds }),
       });
-      
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Erro ao carregar usuários: ${text}`);
+      }
+
       const emailData = await response.json();
-      
+
       const usersData = snapshot.docs.map((doc: any) => {
         const userData = doc.data();
         const userEmail = emailData[userData.uid] || userData.email || 'Email não encontrado';
