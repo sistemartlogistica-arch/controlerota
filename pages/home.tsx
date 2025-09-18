@@ -94,10 +94,7 @@ export default function Home() {
     }
   }, [userTipo, openRecord]);
 
-
-  
-
-  
+ 
   useEffect(() => {
     if (userTipo === 'copiloto' && openRecord) {
       const interval = setInterval(loadVans, 5000); // Atualizar a cada 5 segundos
