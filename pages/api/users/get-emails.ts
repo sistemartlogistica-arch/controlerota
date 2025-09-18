@@ -1,6 +1,15 @@
 import admin from '@/lib/firebaseAdmin';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    }),
+  });
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -10,11 +19,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { userIds } = req.body;
 
   try {
-    
     console.log('Environment check:', {
       hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
       hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
-      projectId: !!process.env.FIREBASE_PROJECT_ID,
+      projectId: process.env.FIREBASE_PROJECT_ID,
     });
 
     const userRecords = await admin.auth().getUsers(
