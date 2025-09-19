@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { auth } from '../lib/firebase';
 import { createRecord, closeRecord, getOpenRecord } from '../lib/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import DateTimeInput from '@/components/dateInput';
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
@@ -368,15 +369,7 @@ export default function Home() {
             </div>
           )}
           
-          <div className="date-display">
-            <label>Data/Hora:</label>
-            <input
-              type="text"
-              value={new Date().toLocaleString('pt-BR')}
-              readOnly
-              className="input large"
-            />
-          </div>
+          <DateTimeInput />
           
           <button 
             onClick={handleOpen} 
@@ -444,15 +437,7 @@ export default function Home() {
             <small>{diarioBordo.length}/100 caracteres</small>
           </div>
           
-          <div className="date-display">
-            <label>Data/Hora:</label>
-            <input
-              type="text"
-              value={new Date().toLocaleString('pt-BR')}
-              readOnly
-              className="input large"
-            />
-          </div>
+          <DateTimeInput />
           
           <button 
             onClick={handleClose} 

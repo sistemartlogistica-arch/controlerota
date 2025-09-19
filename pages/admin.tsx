@@ -6,6 +6,7 @@ import { getAllRecords } from '../lib/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 
+
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
   const [newRotaOrigem, setNewRotaOrigem] = useState('');
@@ -14,6 +15,7 @@ function RotaManagement() {
   const [editingRota, setEditingRota] = useState<any>(null);
   const [editRotaOrigem, setEditRotaOrigem] = useState('');
   const [editRotaDestino, setEditRotaDestino] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     loadRotas();

@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sync-users": "ts-node -P tsconfig.scripts.json scripts/syncUsers.ts"
   },
   "dependencies": {
+    "dotenv": "^17.2.2",
     "firebase": "^10.5.0",
     "firebase-admin": "^12.7.0",
     "jspdf": "^3.0.2",
@@ -20,11 +22,14 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/node": "^20.8.0",
+    "@types/node": "^20.19.17",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "eslint": "^8.51.0",
     "eslint-config-next": "14.0.0",
-    "typescript": "^5.2.0"
-  }
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "type": "commonjs"
+
 }
