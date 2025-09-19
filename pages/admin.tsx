@@ -6,6 +6,7 @@ import { getAllRecords } from '../lib/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 
+
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
   const [newRotaOrigem, setNewRotaOrigem] = useState('');
@@ -14,6 +15,7 @@ function RotaManagement() {
   const [editingRota, setEditingRota] = useState<any>(null);
   const [editRotaOrigem, setEditRotaOrigem] = useState('');
   const [editRotaDestino, setEditRotaDestino] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     loadRotas();
@@ -572,13 +574,18 @@ export default function Admin() {
       const userIds = snapshot.docs.map((doc: any) => doc.data().uid);
       
       const response = await fetch('/api/users/get-emails', {
-        method: 'POST',
+        method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds })
+        body: JSON.stringify({ userIds }),
       });
-      
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Erro ao carregar usuários: ${text}`);
+      }
+
       const emailData = await response.json();
-      
+
       const usersData = snapshot.docs.map((doc: any) => {
         const userData = doc.data();
         const userEmail = emailData[userData.uid] || userData.email || 'Email não encontrado';

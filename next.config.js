@@ -9,10 +9,7 @@ const nextConfig = {
       tls: false,
     };
     return config;
-  },
-  experimental: {
-    outputFileTracingExcludes: ['backup-*.json', '*.js']
   }
 }
 
-module.exports = nextConfig
+module.exports = nextConfig;
