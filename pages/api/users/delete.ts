@@ -15,15 +15,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Deletar usuário do Firebase Auth
-    await admin.auth().deleteUser(uid);
-    
-    // Deletar documento do Firestore
-    await deleteDoc(doc(db, 'usuarios', uid));
+    // Deletar do Firebase Auth (se existir)
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (authError: any) {
+      if (authError.code === 'auth/user-not-found') {
+        console.warn(`Usuário ${uid} não encontrado no Auth, prosseguindo apenas com Firestore...`);
+      } else {
+        throw authError;
+      }
+    }
 
-    res.status(200).json({ message: 'Usuário deletado com sucesso' });
+    // Deletar do Firestore
+    await admin.firestore().collection('usuarios').doc(uid).delete();
+
+    return res.status(200).json({ message: 'Usuário deletado com sucesso' });
   } catch (error: any) {
-    console.error('Erro ao deletar usuário:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    console.error('Erro ao deletar usuário:', error.code || error.message, error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
   }
+
 }
