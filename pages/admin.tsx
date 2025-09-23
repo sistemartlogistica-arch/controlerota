@@ -609,7 +609,7 @@ export default function Admin() {
   const [recordsPerPage] = useState(50);
 
   const loadRecords = async () => {
-    const recordsData = await getAllRecords(1000); // Carregar mais registros
+    const recordsData = await getAllRecords(); // Carregar mais registros
     // Ordenar por nome do usuário
     const sortedRecords = recordsData.sort((a: any, b: any) => {
       const userA = users.find(u => u.uid === a.userId);
