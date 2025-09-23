@@ -30,17 +30,31 @@ export const getOpenRecord = async (userId: string) => {
   return openRecord ? { id: openRecord.id, ...openRecord.data() } : null;
 };
 
-export const getAllRecords = async (pageSize = 50, lastDoc?: any) => {
-  let q = query(
-    collection(db, 'registros'),
-    orderBy('abertura.dataHora', 'desc'),
-    limit(pageSize)
-  );
-  
-  if (lastDoc) {
-    q = query(q, startAfter(lastDoc));
+export const getAllRecords = async () => {
+  const records: any[] = [];
+  let lastDoc: any = null;
+  let hasMore = true;
+
+  while (hasMore) {
+    let q = query(
+      collection(db, 'registros'),
+      orderBy('abertura.dataHora', 'desc'),
+      limit(500) // traz em lotes de 500
+    );
+
+    if (lastDoc) {
+      q = query(q, startAfter(lastDoc));
+    }
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      hasMore = false;
+    } else {
+      records.push(...snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    }
   }
-  
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  return records;
 };
