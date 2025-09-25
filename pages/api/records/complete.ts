@@ -34,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         
         vanData = vanDoc.data();
-        if (kmInicial < vanData.kmAtual) {
+        if (vanData && kmInicial < vanData.kmAtual) {
           return res.status(400).json({ error: `KM inicial deve ser maior ou igual a ${vanData.kmAtual}` });
         }
         

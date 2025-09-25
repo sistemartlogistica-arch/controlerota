@@ -19,6 +19,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     
     const registroData = registroDoc.data();
+    if (!registroData) {
+      return res.status(404).json({ error: 'Dados do registro não encontrados' });
+    }
+    
     const userTipo = registroData.userTipo || 'motorista';
     
     // Validar KM final apenas para motorista
