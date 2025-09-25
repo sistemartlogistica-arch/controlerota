@@ -1,14 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '@/lib/firebaseAdmin';
+import admin from '../../../lib/firebaseAdmin';
 
-import { collection, getDocs, query, where } from 'firebase/firestore';
+// Cache simples em memória
+let cache: any = null;
+let cacheTime = 0;
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  
+  // Verificar cache
+  const now = Date.now();
+  if (cache && (now - cacheTime) < CACHE_DURATION) {
+    return res.status(200).json(cache);
+  }
 
   try {
     const db = admin.firestore();
@@ -24,6 +31,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ...doc.data()
       }))
       .sort((a: any, b: any) => a.placa.localeCompare(b.placa));
+
+    // Atualizar cache
+    cache = vans;
+    cacheTime = now;
 
     res.status(200).json(vans);
   } catch (error: any) {

@@ -1,6 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
 
+// Cache para registros - mais agressivo para economizar cota
+const recordsCache: { [key: string]: { data: any; time: number } } = {};
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos para registros
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
     const { userId, vanId, kmInicial, rotaId, origem, destino } = req.body;
@@ -71,12 +75,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
       
+      // Limpar cache de registros
+      Object.keys(recordsCache).forEach(key => delete recordsCache[key]);
+      
       res.status(201).json({ id: docRef.id });
     } catch (error: any) {
       res.status(400).json({ error: 'Failed to create record' });
     }
   } else if (req.method === 'GET') {
     const { userId, page = 1 } = req.query;
+    
+    // Criar chave de cache baseada nos parâmetros
+    const cacheKey = userId ? `records_${userId}` : 'records_all';
+    
+    // Verificar cache
+    const now = Date.now();
+    if (recordsCache[cacheKey] && (now - recordsCache[cacheKey].time) < CACHE_DURATION) {
+      return res.status(200).json(recordsCache[cacheKey].data);
+    }
     
     try {
       const db = admin.firestore();
@@ -89,6 +105,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       const snapshot = await query.get();
       const records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      
+      // Atualizar cache
+      recordsCache[cacheKey] = { data: records, time: now };
       
       res.status(200).json(records);
     } catch (error: any) {

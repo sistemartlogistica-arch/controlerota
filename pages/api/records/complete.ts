@@ -97,6 +97,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
       
+      // Nota: Cache de registros será limpo automaticamente no próximo restart do servidor
+      // ou pode ser implementado um sistema de invalidação mais sofisticado
+      
       res.status(201).json({ id: docRef.id });
     } catch (error: any) {
       console.error('Erro ao criar registro completo:', error);
