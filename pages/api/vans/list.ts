@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '../../../lib/firebase';
+import admin from '@/lib/firebaseAdmin';
+
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -7,14 +8,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  
+
   try {
-    const q = query(
-      collection(db, 'vans'), 
-      where('ativa', '==', true)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    const vans = querySnapshot.docs
+    const db = admin.firestore();
+
+    const snapshot = await db
+      .collection('vans')
+      .where('ativa', '==', true)
+      .get();
+
+    const vans = snapshot.docs
       .map((doc: any) => ({
         id: doc.id,
         ...doc.data()
