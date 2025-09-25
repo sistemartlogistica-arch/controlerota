@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json({
       uid: userCredential.user.uid,
       email: userCredential.user.email,
-      profile: userDoc.data()?.perfil
+      profile: 'admin'
     });
   } catch (error: any) {
     res.status(401).json({ error: 'Invalid credentials' });

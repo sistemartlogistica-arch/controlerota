@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -8,12 +7,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const q = query(
-      collection(db, 'vans'),
-      where('ativa', '==', false)
-    );
+    const db = admin.firestore();
     
-    const snapshot = await getDocs(q);
+    const snapshot = await db
+      .collection('vans')
+      .where('ativa', '==', false)
+      .get();
+    
     const vans = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
