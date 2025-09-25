@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'PUT') {
@@ -11,6 +10,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+      const db = admin.firestore();
+      
       const updateData: any = {};
 
       if (kmInicial !== null && kmInicial !== undefined) {
@@ -33,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         updateData['fechamento.diarioBordo'] = diarioBordo;
       }
 
-      await updateDoc(doc(db, 'registros', id), updateData);
+      await db.collection('registros').doc(id).update(updateData);
 
       res.status(200).json({ success: true });
     } catch (error) {
@@ -48,7 +49,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      await deleteDoc(doc(db, 'registros', id));
+      const db = admin.firestore();
+      
+      await db.collection('registros').doc(id).delete();
       res.status(200).json({ success: true });
     } catch (error) {
       console.error('Erro ao deletar registro:', error);

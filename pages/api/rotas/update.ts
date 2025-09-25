@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '../../../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
@@ -8,14 +7,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const db = admin.firestore();
+    
     const { id, origem, destino } = req.body;
 
     if (!id || !origem || !destino) {
       return res.status(400).json({ error: 'ID, origem e destino são obrigatórios' });
     }
 
-    const rotaRef = doc(db, 'rotas', id);
-    await updateDoc(rotaRef, {
+    await db.collection('rotas').doc(id).update({
       origem,
       destino
     });

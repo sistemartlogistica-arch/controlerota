@@ -547,17 +547,6 @@ export default function Admin() {
     dashboard: false,
   });
 
-  // Estados para criação de registro
-  const [showCreateRecordModal, setShowCreateRecordModal] = useState(false);
-  const [newRecordUserId, setNewRecordUserId] = useState("");
-  const [newRecordVanId, setNewRecordVanId] = useState("");
-  const [newRecordRotaId, setNewRecordRotaId] = useState("");
-  const [newRecordKmInicial, setNewRecordKmInicial] = useState("");
-  const [newRecordKmFinal, setNewRecordKmFinal] = useState("");
-  const [newRecordDataAbertura, setNewRecordDataAbertura] = useState("");
-  const [newRecordHoraAbertura, setNewRecordHoraAbertura] = useState("");
-  const [newRecordDataFechamento, setNewRecordDataFechamento] = useState("");
-  const [newRecordHoraFechamento, setNewRecordHoraFechamento] = useState("");
   const [vans, setVans] = useState<any[]>([]);
   const [rotas, setRotas] = useState<any[]>([]);
 
@@ -567,8 +556,8 @@ export default function Admin() {
 
   const handleRegistroCriado = (registro: any) => {
     console.log("Registro criado:", registro);
-    setShowCreateRecordModal(false);
     setRecords((prevRecords) => [registro, ...prevRecords]);
+    loadRecords(); // Recarregar registros para garantir sincronização
   };
 
   // Atualizar registros em aberto a cada 5 minutos
@@ -747,114 +736,6 @@ export default function Admin() {
     fetchRotas();
   }, []);
 
-  const handleCreateRecord = async () => {
-    if (!newRecordUserId) return;
-
-    setLoading(true);
-    try {
-      const user = users.find((u) => u.uid === newRecordUserId);
-      if (!user) {
-        alert("Usuário não encontrado");
-        return;
-      }
-
-      // Validar campos obrigatórios
-      if (
-        !newRecordDataAbertura ||
-        !newRecordHoraAbertura ||
-        !newRecordDataFechamento ||
-        !newRecordHoraFechamento
-      ) {
-        alert("Preencha todas as datas e horários");
-        return;
-      }
-
-      if (!newRecordKmInicial || !newRecordKmFinal) {
-        alert("Preencha KM inicial e final");
-        return;
-      }
-
-      const kmInicial = parseInt(newRecordKmInicial);
-      const kmFinal = parseInt(newRecordKmFinal);
-
-      if (kmFinal <= kmInicial) {
-        alert("KM final deve ser maior que KM inicial");
-        return;
-      }
-
-      const recordData: any = {
-        userId: newRecordUserId,
-        abertura: {
-          dataHora: new Date(
-            `${newRecordDataAbertura}T${newRecordHoraAbertura}:00`
-          ).toISOString(),
-          kmInicial: kmInicial,
-        },
-        fechamento: {
-          dataHora: new Date(
-            `${newRecordDataFechamento}T${newRecordHoraFechamento}:00`
-          ).toISOString(),
-          kmFinal: kmFinal,
-        },
-      };
-
-      // Todos os usuários devem selecionar van e rota
-      if (!newRecordVanId || !newRecordRotaId) {
-        alert("Selecione uma van e uma rota");
-        return;
-      }
-
-      recordData.vanId = newRecordVanId;
-      recordData.placa =
-        (vans && Array.isArray(vans)
-          ? vans.find((v) => v.id === newRecordVanId)?.placa
-          : "") || "";
-      recordData.rotaId = newRecordRotaId;
-
-      // Buscar dados da rota
-      const rota =
-        rotas && Array.isArray(rotas)
-          ? rotas.find((r) => r.id === newRecordRotaId)
-          : null;
-      if (rota) {
-        recordData.origem = rota.origem;
-        recordData.destino = rota.destino;
-      }
-
-      const response = await fetch("/api/records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(recordData),
-      });
-
-      if (response.ok) {
-        alert("Registro criado com sucesso!");
-        setShowCreateRecordModal(false);
-        // Limpar formulário
-        setNewRecordUserId("");
-        setNewRecordVanId("");
-        setNewRecordRotaId("");
-        setNewRecordKmInicial("");
-        setNewRecordKmFinal("");
-        setNewRecordDataAbertura("");
-        setNewRecordHoraAbertura("");
-        setNewRecordDataFechamento("");
-        setNewRecordHoraFechamento("");
-        // Recarregar dados
-        loadRecords();
-        loadVans();
-        loadRotas();
-      } else {
-        const error = await response.json();
-        alert(`Erro: ${error.error}`);
-      }
-    } catch (error) {
-      console.error("Erro ao criar registro:", error);
-      alert("Erro ao criar registro");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const addJornadaHorario = () => {
     setNewUserJornada([
@@ -1380,11 +1261,13 @@ export default function Admin() {
       if (selectedUser?.jornada) {
         let totalMinutos = 0;
         selectedUser.jornada.forEach((j: any) => {
-          const [entradaH, entradaM] = j.entrada.split(":").map(Number);
-          const [saidaH, saidaM] = j.saida.split(":").map(Number);
-          const entradaMin = entradaH * 60 + entradaM;
-          const saidaMin = saidaH * 60 + saidaM;
-          totalMinutos += saidaMin - entradaMin;
+          if (j.entrada && j.saida) {
+            const [entradaH, entradaM] = j.entrada.split(":").map(Number);
+            const [saidaH, saidaM] = j.saida.split(":").map(Number);
+            const entradaMin = entradaH * 60 + entradaM;
+            const saidaMin = saidaH * 60 + saidaM;
+            totalMinutos += saidaMin - entradaMin;
+          }
         });
         const horas = Math.floor(totalMinutos / 60);
         const minutos = totalMinutos % 60;
@@ -1538,11 +1421,13 @@ export default function Admin() {
       // Calcular total de minutos da jornada normal do usuário
       let jornadaNormalMinutos = 0;
       userJornada.forEach((j: any) => {
-        const [entradaH, entradaM] = j.entrada.split(":").map(Number);
-        const [saidaH, saidaM] = j.saida.split(":").map(Number);
-        const entradaMin = entradaH * 60 + entradaM;
-        const saidaMin = saidaH * 60 + saidaM;
-        jornadaNormalMinutos += saidaMin - entradaMin;
+        if (j.entrada && j.saida) {
+          const [entradaH, entradaM] = j.entrada.split(":").map(Number);
+          const [saidaH, saidaM] = j.saida.split(":").map(Number);
+          const entradaMin = entradaH * 60 + entradaM;
+          const saidaMin = saidaH * 60 + saidaM;
+          jornadaNormalMinutos += saidaMin - entradaMin;
+        }
       });
 
       const jornadaNormalHoras = Math.floor(jornadaNormalMinutos / 60);
@@ -2045,14 +1930,10 @@ export default function Admin() {
     router.push("/login");
   };
 
-  const refreshData = () => {
-    loadUsers();
-    loadRecords();
-  };
-
   const refreshAllData = () => {
     loadUsers();
     loadRecords();
+    loadVans()
     setCurrentPage(1); // Reset para primeira página
   };
 

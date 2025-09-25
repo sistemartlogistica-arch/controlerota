@@ -24,12 +24,10 @@ export default function RegistroModalCompleto({
   const [newRecordHoraFechamento, setNewRecordHoraFechamento] = useState("");
   const [newRecordKmInicial, setNewRecordKmInicial] = useState("");
   const [newRecordKmFinal, setNewRecordKmFinal] = useState("");
+  const [newRecordDiarioBordo, setNewRecordDiarioBordo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const distancia = newRecordKmFinal && newRecordKmInicial
-    ? parseInt(newRecordKmFinal) - parseInt(newRecordKmInicial)
-    : 0;
 
   const handleCreateRecord = async () => {
     if (
@@ -47,24 +45,32 @@ export default function RegistroModalCompleto({
       return;
     }
 
+    const kmInicial = parseInt(newRecordKmInicial);
+    const kmFinal = parseInt(newRecordKmFinal);
+
+    if (kmFinal <= kmInicial) {
+      setError("KM final deve ser maior que KM inicial!");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch("/api/records", {
+      const response = await fetch("/api/records/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: newRecordUserId,
           vanId: newRecordVanId,
           rotaId: newRecordRotaId,
-          kmInicial: parseInt(newRecordKmInicial),
-          kmFinal: parseInt(newRecordKmFinal),
+          kmInicial: kmInicial,
+          kmFinal: kmFinal,
           dataAbertura: newRecordDataAbertura,
           horaAbertura: newRecordHoraAbertura,
           dataFechamento: newRecordDataFechamento,
           horaFechamento: newRecordHoraFechamento,
-          distancia, // já calcula direto aqui
+          diarioBordo: newRecordDiarioBordo || null,
         }),
       });
 
@@ -185,12 +191,16 @@ export default function RegistroModalCompleto({
         </div>
 
         {/* Distância calculada */}
-        {distancia > 0 && <p>Distância percorrida: {distancia} km</p>}
+        {newRecordKmFinal && newRecordKmInicial && (
+          <p style={{ marginTop: "5px", color: "#666" }}>
+            Distância percorrida: {parseInt(newRecordKmFinal) - parseInt(newRecordKmInicial)} km
+          </p>
+        )}
 
-        {/* Datas e horas */}
+        {/* Datas e horas de abertura */}
         <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
           <div style={{ flex: 1 }}>
-            <label>Data de início:</label>
+            <label>Data de abertura:</label>
             <input
               type="date"
               value={newRecordDataAbertura}
@@ -199,7 +209,7 @@ export default function RegistroModalCompleto({
             />
           </div>
           <div style={{ flex: 1 }}>
-            <label>Hora de início:</label>
+            <label>Hora de abertura:</label>
             <input
               type="time"
               value={newRecordHoraAbertura}
@@ -209,6 +219,7 @@ export default function RegistroModalCompleto({
           </div>
         </div>
 
+        {/* Datas e horas de fechamento */}
         <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
           <div style={{ flex: 1 }}>
             <label>Data de fechamento:</label>
@@ -229,6 +240,22 @@ export default function RegistroModalCompleto({
             />
           </div>
         </div>
+
+        {/* Diário de bordo */}
+        <div style={{ marginTop: "15px" }}>
+          <label>Diário de Bordo (opcional):</label>
+          <textarea
+            value={newRecordDiarioBordo}
+            onChange={(e) => setNewRecordDiarioBordo(e.target.value)}
+            style={{
+              ...inputStyle,
+              minHeight: "60px",
+              resize: "vertical"
+            }}
+            placeholder="Observações sobre a viagem..."
+          />
+        </div>
+
 
         {/* Botões */}
         <div

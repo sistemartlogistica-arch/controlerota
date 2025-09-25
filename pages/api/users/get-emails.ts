@@ -1,4 +1,4 @@
-import admin from '@/lib/firebaseAdmin';
+import admin from '../../../lib/firebaseAdmin';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 if (!admin.apps.length) {

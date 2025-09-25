@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
-import admin from '@/lib/firebaseAdmin';
+import admin from '../../../lib/firebaseAdmin';
 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       emailVerified: false
     });
     
-    await setDoc(doc(db, 'usuarios', userRecord.uid), {
+    await admin.firestore().collection('usuarios').doc(userRecord.uid).set({
       uid: userRecord.uid,
       email: email,
       nome: nome || '',

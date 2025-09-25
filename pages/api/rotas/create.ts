@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '../../../lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -14,6 +13,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const db = admin.firestore();
+    
     const rotaData = {
       origem: origem.trim(),
       destino: destino.trim(),
@@ -21,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       criadaEm: new Date().toISOString()
     };
 
-    const docRef = await addDoc(collection(db, 'rotas'), rotaData);
+    const docRef = await db.collection('rotas').add(rotaData);
     
     res.status(201).json({ id: docRef.id, ...rotaData });
   } catch (error: any) {

@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { doc, updateDoc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
@@ -11,9 +10,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { kmFinal } = req.body;
 
   try {
+    const db = admin.firestore();
+    
     // Buscar o registro para pegar o vanId
-    const registroDoc = await getDoc(doc(db, 'registros', id as string));
-    if (!registroDoc.exists()) {
+    const registroDoc = await db.collection('registros').doc(id as string).get();
+    if (!registroDoc.exists) {
       return res.status(404).json({ error: 'Registro não encontrado' });
     }
     
@@ -45,11 +46,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updateData.fechamento.kmFinal = kmFinal;
     }
     
-    await updateDoc(doc(db, 'registros', id as string), updateData);
+    await db.collection('registros').doc(id as string).update(updateData);
     
     // Atualizar o KM atual da van (apenas para motorista)
     if (userTipo === 'motorista' && registroData.vanId && kmFinal) {
-      await updateDoc(doc(db, 'vans', registroData.vanId), {
+      await db.collection('vans').doc(registroData.vanId).update({
         kmAtual: kmFinal
       });
     }

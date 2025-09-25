@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '@/lib/firebaseAdmin';
-import { doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {

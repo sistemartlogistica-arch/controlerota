@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '../../../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {
@@ -14,8 +13,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const db = admin.firestore();
+    
     // Desativar van ao invés de deletar
-    await updateDoc(doc(db, 'vans', id), {
+    await db.collection('vans').doc(id).update({
       ativa: false,
       desativadaEm: new Date().toISOString()
     });
