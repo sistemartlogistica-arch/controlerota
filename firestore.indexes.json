@@ -1,0 +1,71 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "registros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "abertura.dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "registros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "vanId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechamento",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "registros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "abertura.dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ativa",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "placa",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rotas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ativa",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "origem",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

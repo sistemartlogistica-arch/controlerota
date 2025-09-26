@@ -6,6 +6,8 @@ import { getAllRecords } from "../lib/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import RegistroModalCompleto from "@/components/newRegisterModal";
+import { useRecordsSearch } from "../lib/hooks/useRecordsSearch";
+import RecordsSearchForm from "@/components/RecordsSearchForm";
 
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
@@ -515,7 +517,19 @@ export default function Admin() {
 
   const [user, setUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
-  const [records, setRecords] = useState<any[]>([]);
+  
+  // Usar o novo sistema de busca
+  const {
+    records,
+    totalCount,
+    loading: searchLoading,
+    error: searchError,
+    hasSearched,
+    applyFilters,
+    clearFilters,
+    changePage,
+    loadInitialCount
+  } = useRecordsSearch();
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserNome, setNewUserNome] = useState("");
@@ -556,8 +570,7 @@ export default function Admin() {
 
   const handleRegistroCriado = (registro: any) => {
     console.log("Registro criado:", registro);
-    setRecords((prevRecords) => [registro, ...prevRecords]);
-    loadRecords(); // Recarregar registros para garantir sincronização
+    loadInitialCount(); // Recarregar contagem
   };
 
   // Atualizar registros em aberto a cada 5 minutos
@@ -569,7 +582,7 @@ export default function Admin() {
 
     updateOpenRecords();
     const interval = setInterval(() => {
-      loadRecords(); // Recarregar todos os registros
+        loadInitialCount(); // Recarregar contagem
       updateOpenRecords();
     }, 5 * 60 * 1000); // 5 minutos
 
@@ -625,7 +638,7 @@ export default function Admin() {
 
         setUser(user);
         loadUsers();
-        loadRecords();
+        loadInitialCount();
       } catch (error) {
         console.error("Erro ao verificar perfil admin:", error);
         router.push("/login");
@@ -673,21 +686,10 @@ export default function Admin() {
     }
   };
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [recordsPerPage] = useState(50);
-
-  const loadRecords = async () => {
-    const recordsData = await getAllRecords(); // Carregar mais registros
-    // Ordenar por nome do usuário
-    const sortedRecords = recordsData.sort((a: any, b: any) => {
-      const userA = users.find((u) => u.uid === a.userId);
-      const userB = users.find((u) => u.uid === b.userId);
-      const nameA = userA?.nome || "";
-      const nameB = userB?.nome || "";
-      return nameA.localeCompare(nameB);
-    });
-    setRecords(sortedRecords);
-  };
+  // Carregar contagem inicial quando o componente montar
+  useEffect(() => {
+    loadInitialCount();
+  }, [loadInitialCount]);
 
   const loadVans = async () => {
     try {
@@ -871,7 +873,7 @@ export default function Admin() {
           dataFechamento: "",
           diarioBordo: "",
         });
-        loadRecords();
+        loadInitialCount();
       } else {
         alert("Erro ao atualizar registro");
       }
@@ -900,7 +902,7 @@ export default function Admin() {
 
       if (response.ok) {
         alert("Registro deletado com sucesso");
-        loadRecords();
+        loadInitialCount();
       } else {
         alert("Erro ao deletar registro");
       }
@@ -1932,9 +1934,8 @@ export default function Admin() {
 
   const refreshAllData = () => {
     loadUsers();
-    loadRecords();
-    loadVans()
-    setCurrentPage(1); // Reset para primeira página
+    loadInitialCount();
+    loadVans();
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -3090,7 +3091,7 @@ export default function Admin() {
           className="section-header"
           onClick={() => toggleSection("records")}
         >
-          <h2>Registros ({records.length})</h2>
+          <h2>Registros ({totalCount.toLocaleString()})</h2>
           <div className="section-actions" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -3126,7 +3127,16 @@ export default function Admin() {
 
         {expandedSections.records && (
           <div>
-            <div className="chart-filters">
+            {/* Novo sistema de busca */}
+            <RecordsSearchForm
+              onSearch={applyFilters}
+              onClear={clearFilters}
+              loading={searchLoading}
+              users={users}
+              vans={vans}
+            />
+            
+            <div className="chart-filters" style={{display: 'none'}}>
               <input
                 type="date"
                 value={recordFilters.startDate}
@@ -3220,76 +3230,69 @@ export default function Admin() {
               </button>
               {/* Modal de Criação de Registro */}
             </div>
-            <div className="records-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Tipo</th>
-                    <th>Van</th>
-                    <th>Rota</th>
-                    <th>KM Inicial</th>
-                    <th>Data Abertura</th>
-                    <th>KM Final</th>
-                    <th>Data Fechamento</th>
-                    <th>Distância</th>
-                    <th>Diário</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records
-                    .filter((record: any) => {
-                      if (
-                        recordFilters.selectedUser &&
-                        record.userId !== recordFilters.selectedUser
-                      ) {
-                        return false;
-                      }
+              <div className="records-table">
+                {/* Indicador de estado */}
+                {!hasSearched && (
+                  <div style={{
+                    padding: '40px',
+                    textAlign: 'center',
+                    backgroundColor: '#f8f9fa',
+                    border: '2px dashed #dee2e6',
+                    borderRadius: '8px',
+                    margin: '20px 0'
+                  }}>
+                    <h3 style={{ color: '#6c757d', margin: '0 0 10px 0' }}>
+                      🔍 Use os filtros acima para buscar registros
+                    </h3>
+                    <p style={{ color: '#6c757d', margin: 0 }}>
+                      Total de registros no banco: <strong>{totalCount.toLocaleString()}</strong>
+                    </p>
+                  </div>
+                )}
 
-                      if (recordFilters.startDate || recordFilters.endDate) {
-                        const recordDate = new Date(record.abertura?.dataHora);
+                {searchError && (
+                  <div style={{
+                    padding: '15px',
+                    backgroundColor: '#f8d7da',
+                    color: '#721c24',
+                    border: '1px solid #f5c6cb',
+                    borderRadius: '4px',
+                    marginBottom: '15px'
+                  }}>
+                    Erro ao buscar registros: {searchError}
+                  </div>
+                )}
 
-                        if (recordFilters.startDate) {
-                          const startDate = new Date(
-                            recordFilters.startDate + "T00:00:00-03:00"
-                          );
-                          if (recordDate < startDate) {
-                            return false;
-                          }
-                        }
-                        if (recordFilters.endDate) {
-                          const endDate = new Date(
-                            recordFilters.endDate + "T23:59:59-03:00"
-                          );
-                          if (recordDate > endDate) {
-                            return false;
-                          }
-                        }
-                      }
+                {searchLoading && (
+                  <div style={{
+                    padding: '40px',
+                    textAlign: 'center',
+                    color: '#6c757d'
+                  }}>
+                    Carregando registros...
+                  </div>
+                )}
 
-                      if (recordFilters.showOnlyOpen && record.fechamento) {
-                        return false;
-                      }
-
-                      if (recordFilters.rotaSearch) {
-                        const rota = `${record.origem || ""} ${
-                          record.destino || ""
-                        }`.toLowerCase();
-                        if (
-                          !rota.includes(recordFilters.rotaSearch.toLowerCase())
-                        ) {
-                          return false;
-                        }
-                      }
-
-                      return true;
-                    })
-                    .slice(
-                      (currentPage - 1) * recordsPerPage,
-                      currentPage * recordsPerPage
-                    )
-                    .map((record: any) => {
+                {hasSearched && !searchLoading && (
+                  <>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Nome</th>
+                          <th>Tipo</th>
+                          <th>Van</th>
+                          <th>Rota</th>
+                          <th>KM Inicial</th>
+                          <th>Data Abertura</th>
+                          <th>KM Final</th>
+                          <th>Data Fechamento</th>
+                          <th>Distância</th>
+                          <th>Diário</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {records.map((record: any) => {
                       const user = users.find((u) => u.uid === record.userId);
                       const distancia =
                         record.fechamento?.kmFinal && record.abertura?.kmInicial
@@ -3405,101 +3408,44 @@ export default function Admin() {
                             </div>
                           </td>
                         </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-
-              {/* Paginação */}
-              {(() => {
-                const filteredRecordsForPagination = records.filter(
-                  (record: any) => {
-                    if (
-                      recordFilters.selectedUser &&
-                      record.userId !== recordFilters.selectedUser
-                    ) {
-                      return false;
-                    }
-
-                    if (recordFilters.startDate || recordFilters.endDate) {
-                      const recordDate = new Date(record.abertura?.dataHora);
-
-                      if (recordFilters.startDate) {
-                        const startDate = new Date(
-                          recordFilters.startDate + "T00:00:00-03:00"
                         );
-                        if (recordDate < startDate) {
-                          return false;
-                        }
-                      }
-                      if (recordFilters.endDate) {
-                        const endDate = new Date(
-                          recordFilters.endDate + "T23:59:59-03:00"
-                        );
-                        if (recordDate > endDate) {
-                          return false;
-                        }
-                      }
-                    }
+                      })}
+                      </tbody>
+                    </table>
+                  </>
+                )}
 
-                    if (recordFilters.showOnlyOpen && record.fechamento) {
-                      return false;
-                    }
-
-                    if (recordFilters.rotaSearch) {
-                      const rota = `${record.origem || ""} ${
-                        record.destino || ""
-                      }`.toLowerCase();
-                      if (
-                        !rota.includes(recordFilters.rotaSearch.toLowerCase())
-                      ) {
-                        return false;
-                      }
-                    }
-
-                    return true;
-                  }
-                );
-
-                const totalPages = Math.ceil(
-                  filteredRecordsForPagination.length / recordsPerPage
-                );
-
-                return (
-                  <div
-                    className="pagination"
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      gap: "10px",
-                      marginTop: "20px",
-                    }}
+              {/* Paginação simples */}
+              {hasSearched && records.length > 0 && (
+                <div style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginTop: "20px",
+                  padding: "15px",
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: "4px"
+                }}>
+                  <button
+                    onClick={() => changePage(1)}
+                    disabled={searchLoading}
+                    className="btn-secondary"
                   >
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.max(1, currentPage - 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="btn-secondary"
-                    >
-                      Anterior
-                    </button>
-                    <span>
-                      Página {currentPage} de {totalPages}
-                    </span>
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.min(totalPages, currentPage + 1))
-                      }
-                      disabled={currentPage >= totalPages}
-                      className="btn-secondary"
-                    >
-                      Próxima
-                    </button>
-                  </div>
-                );
-              })()}
+                    Primeira
+                  </button>
+                  <button
+                    onClick={() => changePage(1)}
+                    disabled={searchLoading}
+                    className="btn-secondary"
+                  >
+                    Próxima
+                  </button>
+                  <span style={{ color: '#6c757d' }}>
+                    Mostrando {records.length} registros
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
