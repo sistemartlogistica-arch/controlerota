@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '../../../lib/firebase';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -14,9 +13,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const db = admin.firestore();
+    
     // Verificar se a placa já existe
-    const q = query(collection(db, 'vans'), where('placa', '==', placa.toUpperCase()));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await db
+      .collection('vans')
+      .where('placa', '==', placa.toUpperCase())
+      .get();
     
     if (!querySnapshot.empty) {
       return res.status(400).json({ error: 'Van com esta placa já existe' });
@@ -30,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       criadaEm: new Date().toISOString()
     };
 
-    const docRef = await addDoc(collection(db, 'vans'), vanData);
+    const docRef = await db.collection('vans').add(vanData);
     
     res.status(201).json({ id: docRef.id, ...vanData });
   } catch (error: any) {

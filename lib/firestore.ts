@@ -38,7 +38,7 @@ export const getAllRecords = async () => {
   while (hasMore) {
     let q = query(
       collection(db, 'registros'),
-      orderBy('abertura.dataHora', 'desc'),
+      // orderBy('abertura.dataHora', 'desc'),
       limit(500) // traz em lotes de 500
     );
 

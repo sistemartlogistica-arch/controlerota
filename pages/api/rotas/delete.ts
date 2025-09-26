@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '../../../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import admin from '../../../lib/firebaseAdmin';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {
@@ -14,7 +13,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    await updateDoc(doc(db, 'rotas', id), {
+    const db = admin.firestore();
+    
+    await db.collection('rotas').doc(id).update({
       ativa: false,
       desativadaEm: new Date().toISOString()
     });

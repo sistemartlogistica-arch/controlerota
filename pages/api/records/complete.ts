@@ -1,17 +1,25 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
 
-// Cache para registros - mais agressivo para economizar cota
-const recordsCache: { [key: string]: { data: any; time: number } } = {};
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos para registros
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
-    const { userId, vanId, kmInicial, rotaId, origem, destino } = req.body;
+    const { 
+      userId, 
+      vanId, 
+      rotaId, 
+      kmInicial, 
+      kmFinal, 
+      dataAbertura, 
+      horaAbertura, 
+      dataFechamento, 
+      horaFechamento,
+      diarioBordo 
+    } = req.body;
     
     try {
       const db = admin.firestore();
       
+      // Buscar dados do usuário
       const userDoc = await db.collection('usuarios').doc(userId).get();
       const userData = userDoc.data();
       const userTipo = userData?.tipo || 'motorista';
@@ -29,23 +37,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (vanData && kmInicial < vanData.kmAtual) {
           return res.status(400).json({ error: `KM inicial deve ser maior ou igual a ${vanData.kmAtual}` });
         }
+        
+        if (kmFinal <= kmInicial) {
+          return res.status(400).json({ error: 'KM final deve ser maior que KM inicial' });
+        }
       }
       
+      // Buscar dados da rota
       let origemFinal = '';
       let destinoFinal = '';
       let rotaIdFinal = null;
       
       if (rotaId) {
-        // Motorista - buscar dados da rota
         const rotaDoc = await db.collection('rotas').doc(rotaId).get();
         const rotaData = rotaDoc.data();
         origemFinal = rotaData?.origem || '';
         destinoFinal = rotaData?.destino || '';
         rotaIdFinal = rotaId;
-      } else if (origem && destino) {
-        // Copiloto - usar origem e destino enviados
-        origemFinal = origem;
-        destinoFinal = destino;
+      }
+      
+      // Criar data/hora de abertura
+      const dataHoraAbertura = new Date(`${dataAbertura}T${horaAbertura}:00`).toISOString();
+      const dataHoraFechamento = new Date(`${dataFechamento}T${horaFechamento}:00`).toISOString();
+      
+      // Validar se data de fechamento é posterior à abertura
+      if (new Date(dataHoraFechamento) <= new Date(dataHoraAbertura)) {
+        return res.status(400).json({ error: 'Data de fechamento deve ser posterior à data de abertura' });
       }
       
       const registroData: any = {
@@ -54,7 +71,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         origem: origemFinal,
         destino: destinoFinal,
         abertura: {
-          dataHora: new Date().toISOString()
+          dataHora: dataHoraAbertura,
+          kmInicial: kmInicial
+        },
+        fechamento: {
+          dataHora: dataHoraFechamento,
+          kmFinal: kmFinal,
+          diarioBordo: diarioBordo || null
         }
       };
 
@@ -63,58 +86,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         registroData.vanId = vanId;
         registroData.placa = vanData.placa;
         registroData.rotaId = rotaIdFinal;
-        registroData.abertura.kmInicial = kmInicial;
       }
 
       const docRef = await db.collection('registros').add(registroData);
       
-      // Atualizar KM da van na abertura (apenas para motorista)
+      // Atualizar KM da van para o KM final (apenas para motorista)
       if (userTipo === 'motorista' && vanId) {
         await db.collection('vans').doc(vanId).update({
-          kmAtual: kmInicial
+          kmAtual: kmFinal
         });
       }
       
-      // Limpar cache de registros
-      Object.keys(recordsCache).forEach(key => delete recordsCache[key]);
+      // Nota: Cache de registros será limpo automaticamente no próximo restart do servidor
+      // ou pode ser implementado um sistema de invalidação mais sofisticado
       
       res.status(201).json({ id: docRef.id });
     } catch (error: any) {
-      res.status(400).json({ error: 'Failed to create record' });
-    }
-  } else if (req.method === 'GET') {
-    const { userId, page = 1 } = req.query;
-    
-    // Criar chave de cache baseada nos parâmetros
-    const cacheKey = userId ? `records_${userId}` : 'records_all';
-    
-    // Verificar cache
-    const now = Date.now();
-    if (recordsCache[cacheKey] && (now - recordsCache[cacheKey].time) < CACHE_DURATION) {
-      return res.status(200).json(recordsCache[cacheKey].data);
-    }
-    
-    try {
-      const db = admin.firestore();
-      
-      let query = db.collection('registros');
-      
-      if (userId) {
-        query = query.where('userId', '==', userId) as any;
-      }
-      
-      const snapshot = await query.get();
-      const records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-      
-      // Atualizar cache
-      recordsCache[cacheKey] = { data: records, time: now };
-      
-      res.status(200).json(records);
-    } catch (error: any) {
-      console.error('Erro ao buscar registros:', error);
-      res.status(400).json({ error: 'Failed to fetch records' });
+      console.error('Erro ao criar registro completo:', error);
+      res.status(400).json({ error: 'Failed to create complete record' });
     }
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
 }
+
