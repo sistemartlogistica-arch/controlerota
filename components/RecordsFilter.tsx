@@ -18,12 +18,40 @@ export default function RecordsFilter({
   vans = [],
   loading = false
 }: RecordsFilterProps) {
-  const [localFilters, setLocalFilters] = useState<FilterOptions>(filters);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Configurar filtros padrão com data atual (fuso horário local)
+  const getDefaultFilters = (): FilterOptions => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    return {
+      dataInicio: todayStr,
+      dataFim: todayStr,
+      status: 'todos',
+      ...filters
+    };
+  };
+
+  const [localFilters, setLocalFilters] = useState<FilterOptions>(getDefaultFilters());
 
   useEffect(() => {
-    setLocalFilters(filters);
+    // Se não há filtros aplicados, usar os padrão
+    if (Object.keys(filters).length === 0) {
+      setLocalFilters(getDefaultFilters());
+    } else {
+      setLocalFilters(filters);
+    }
   }, [filters]);
+
+  // Aplicar filtros padrão automaticamente quando o componente for montado
+  useEffect(() => {
+    if (Object.keys(filters).length === 0) {
+      const defaultFilters = getDefaultFilters();
+      onFiltersChange(defaultFilters);
+    }
+  }, []);
 
   const handleFilterChange = (key: keyof FilterOptions, value: string) => {
     const newFilters = {
@@ -38,11 +66,45 @@ export default function RecordsFilter({
   };
 
   const handleClearFilters = () => {
-    setLocalFilters({});
-    onClearFilters();
+    // Sempre usar a data atual, não os filtros existentes
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    const defaultFilters: FilterOptions = {
+      dataInicio: todayStr,
+      dataFim: todayStr,
+      status: 'todos'
+    };
+    
+    console.log('Resetando filtros para:', defaultFilters);
+    setLocalFilters(defaultFilters);
+    onFiltersChange(defaultFilters);
   };
 
-  const hasActiveFilters = Object.values(filters).some(value => value !== undefined && value !== '');
+  // Verificar se há filtros além dos padrão (data atual)
+  const getDefaultFiltersForComparison = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    return {
+      dataInicio: todayStr,
+      dataFim: todayStr,
+      status: 'todos'
+    };
+  };
+
+  const defaultFilters = getDefaultFiltersForComparison();
+  const hasActiveFilters = Object.keys(localFilters).some(key => {
+    const currentValue = localFilters[key as keyof FilterOptions];
+    const defaultValue = defaultFilters[key as keyof typeof defaultFilters];
+    return currentValue !== undefined && currentValue !== '' && currentValue !== defaultValue;
+  });
 
   return (
     <div style={{
@@ -62,19 +124,6 @@ export default function RecordsFilter({
           🔍 Filtros de Registros
         </h3>
         <div>
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            style={{
-              padding: '8px 16px',
-              marginRight: '10px',
-              border: '1px solid #6c757d',
-              borderRadius: '4px',
-              backgroundColor: 'white',
-              cursor: 'pointer'
-            }}
-          >
-            {showAdvanced ? 'Filtros Simples' : 'Filtros Avançados'}
-          </button>
           {hasActiveFilters && (
             <button
               onClick={handleClearFilters}
@@ -87,13 +136,63 @@ export default function RecordsFilter({
                 cursor: 'pointer'
               }}
             >
-              Limpar Filtros
+              Resetar para Hoje
             </button>
           )}
         </div>
       </div>
 
+      {/* Aviso sobre filtro padrão */}
+      <div style={{
+        backgroundColor: '#e7f3ff',
+        border: '1px solid #b3d9ff',
+        borderRadius: '4px',
+        padding: '10px',
+        marginBottom: '15px',
+        fontSize: '14px',
+        color: '#0066cc'
+      }}>
+        <strong>📅 Filtro Padrão:</strong> Por padrão, o sistema busca registros do dia atual. 
+        Você pode alterar as datas ou outros filtros conforme necessário.
+      </div>
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
+        {/* Filtro de Data Início */}
+        <div style={{ minWidth: '150px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            Data Início:
+          </label>
+          <input
+            type="date"
+            value={localFilters.dataInicio || ''}
+            onChange={(e) => handleFilterChange('dataInicio', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px',
+              border: '1px solid #ced4da',
+              borderRadius: '4px'
+            }}
+          />
+        </div>
+
+        {/* Filtro de Data Fim */}
+        <div style={{ minWidth: '150px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+            Data Fim:
+          </label>
+          <input
+            type="date"
+            value={localFilters.dataFim || ''}
+            onChange={(e) => handleFilterChange('dataFim', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px',
+              border: '1px solid #ced4da',
+              borderRadius: '4px'
+            }}
+          />
+        </div>
+
         {/* Filtro de Status */}
         <div style={{ minWidth: '150px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
@@ -185,46 +284,6 @@ export default function RecordsFilter({
         </div>
       </div>
 
-      {/* Filtros Avançados */}
-      {showAdvanced && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
-          {/* Filtro de Data Início */}
-          <div style={{ minWidth: '150px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              Data Início:
-            </label>
-            <input
-              type="date"
-              value={localFilters.dataInicio || ''}
-              onChange={(e) => handleFilterChange('dataInicio', e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          {/* Filtro de Data Fim */}
-          <div style={{ minWidth: '150px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-              Data Fim:
-            </label>
-            <input
-              type="date"
-              value={localFilters.dataFim || ''}
-              onChange={(e) => handleFilterChange('dataFim', e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Botões de Ação */}
       <div style={{ display: 'flex', gap: '10px' }}>
@@ -281,7 +340,15 @@ export default function RecordsFilter({
                 dataFim: 'Data Fim',
                 status: 'Status'
               };
-              return `${labels[key]}: ${value}`;
+              
+              // Converter datas para formato brasileiro
+              let displayValue = value;
+              if (key === 'dataInicio' || key === 'dataFim') {
+                const date = new Date(value + 'T00:00:00');
+                displayValue = date.toLocaleDateString('pt-BR');
+              }
+              
+              return `${labels[key]}: ${displayValue}`;
             })
             .join(', ')}
         </div>

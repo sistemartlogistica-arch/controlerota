@@ -30,16 +30,25 @@ export const getOpenRecord = async (userId: string) => {
   return openRecord ? { id: openRecord.id, ...openRecord.data() } : null;
 };
 
-export const getAllRecords = async () => {
+/**
+ * Busca todos os registros do Firestore
+ * @param limitCount - Limite de registros (opcional, padrão: todos)
+ * @param sinceTimestamp - Buscar apenas registros após este timestamp (para delta updates)
+ * @returns Array de registros ordenados por data de abertura (mais recentes primeiro)
+ */
+export const getAllRecords = async (limitCount?: number, sinceTimestamp?: string) => {
   const records: any[] = [];
   let lastDoc: any = null;
   let hasMore = true;
+  let totalFetched = 0;
 
-  while (hasMore) {
+  console.info(`📡 Buscando registros${sinceTimestamp ? ' (delta update)' : ' (full load)'}...`);
+
+  while (hasMore && (!limitCount || totalFetched < limitCount)) {
     let q = query(
       collection(db, 'registros'),
-      // orderBy('abertura.dataHora', 'desc'),
-      limit(500) // traz em lotes de 500
+      orderBy('abertura.dataHora', 'desc'), // Ordenar por data de abertura (mais recentes primeiro)
+      limit(limitCount ? Math.min(500, limitCount - totalFetched) : 500)
     );
 
     if (lastDoc) {
@@ -51,10 +60,36 @@ export const getAllRecords = async () => {
     if (snapshot.empty) {
       hasMore = false;
     } else {
-      records.push(...snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const batchRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Se há timestamp de referência, filtrar registros mais recentes
+      if (sinceTimestamp) {
+        const filteredRecords = batchRecords.filter((record: any) => 
+          record.abertura?.dataHora && 
+          record.abertura.dataHora > sinceTimestamp
+        );
+        
+        records.push(...filteredRecords);
+        totalFetched += filteredRecords.length;
+        
+        // Se não há mais registros recentes, parar
+        if (filteredRecords.length === 0) {
+          hasMore = false;
+        }
+      } else {
+        records.push(...batchRecords);
+        totalFetched += batchRecords.length;
+      }
+      
       lastDoc = snapshot.docs[snapshot.docs.length - 1];
+      
+      // Se atingiu o limite, parar
+      if (limitCount && totalFetched >= limitCount) {
+        hasMore = false;
+      }
     }
   }
 
+  console.info(`✅ Busca concluída: ${records.length} registros encontrados`);
   return records;
 };

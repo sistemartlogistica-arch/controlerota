@@ -6,8 +6,11 @@ import { getAllRecords } from "../lib/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import RegistroModalCompleto from "@/components/newRegisterModal";
-import { useRecordsSearch } from "../lib/hooks/useRecordsSearch";
+import { useRecordsWithCache } from "../lib/hooks/useRecordsWithCache";
 import RecordsSearchForm from "@/components/RecordsSearchForm";
+import RecordsFilter from "@/components/RecordsFilter";
+import RecordsPagination from "@/components/RecordsPagination";
+import { FilterOptions } from "../lib/hooks/useRecordsFilter";
 
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
@@ -518,18 +521,19 @@ export default function Admin() {
   const [user, setUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   
-  // Usar o novo sistema de busca
+  // Usar o novo sistema de cache inteligente (lazy loading)
   const {
     records,
     totalCount,
-    loading: searchLoading,
-    error: searchError,
-    hasSearched,
-    applyFilters,
-    clearFilters,
-    changePage,
-    loadInitialCount
-  } = useRecordsSearch();
+    loading: cacheLoading,
+    error: cacheError,
+    refreshRecords,
+    loadRecords,
+    cacheStats
+  } = useRecordsWithCache();
+
+  // Estado para controlar se os registros devem ser carregados
+  const [shouldLoadRecords, setShouldLoadRecords] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserNome, setNewUserNome] = useState("");
@@ -570,7 +574,72 @@ export default function Admin() {
 
   const handleRegistroCriado = (registro: any) => {
     console.log("Registro criado:", registro);
-    loadInitialCount(); // Recarregar contagem
+    refreshRecords(); // Recarregar registros via cache
+  };
+
+  // Função para buscar registros com filtros
+  const handleSearchRecords = async (filters: FilterOptions, page: number = 1) => {
+    setIsSearching(true);
+    try {
+      const response = await fetch('/api/records/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...filters,
+          page,
+          pageSize: 50
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFilteredRecords(data.records || []);
+        setSearchFilters(filters);
+        setPagination(data.pagination || {
+          page: 1,
+          pageSize: 50,
+          total: 0,
+          totalPages: 0,
+          hasMore: false
+        });
+      } else {
+        console.error('Erro ao buscar registros');
+        setFilteredRecords([]);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar registros:', error);
+      setFilteredRecords([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Função para limpar filtros
+  const handleClearFilters = () => {
+    // Sempre usar a data atual, não os filtros existentes
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    const defaultFilters = {
+      dataInicio: todayStr,
+      dataFim: todayStr,
+      status: 'todos' as const
+    };
+    
+    console.log('Admin: Resetando filtros para:', defaultFilters);
+    setSearchFilters(defaultFilters);
+    // Buscar registros com filtros padrão em vez de limpar
+    handleSearchRecords(defaultFilters, 1);
+  };
+
+  // Função para mudar de página
+  const handlePageChange = (newPage: number) => {
+    handleSearchRecords(searchFilters, newPage);
   };
 
   // Atualizar registros em aberto a cada 5 minutos
@@ -582,7 +651,7 @@ export default function Admin() {
 
     updateOpenRecords();
     const interval = setInterval(() => {
-        loadInitialCount(); // Recarregar contagem
+        refreshRecords(); // Recarregar registros via cache
       updateOpenRecords();
     }, 5 * 60 * 1000); // 5 minutos
 
@@ -599,6 +668,32 @@ export default function Admin() {
     selectedUser: "",
     showOnlyOpen: false,
     rotaSearch: "",
+  });
+
+  // Estados para o novo sistema de filtro
+  const getDefaultFilters = (): FilterOptions => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    return {
+      dataInicio: todayStr,
+      dataFim: todayStr,
+      status: 'todos'
+    };
+  };
+
+  const [searchFilters, setSearchFilters] = useState<FilterOptions>(getDefaultFilters());
+  const [filteredRecords, setFilteredRecords] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 50,
+    total: 0,
+    totalPages: 0,
+    hasMore: false
   });
   const [jornadasFilters, setJornadasFilters] = useState({
     startDate: "",
@@ -638,7 +733,7 @@ export default function Admin() {
 
         setUser(user);
         loadUsers();
-        loadInitialCount();
+        // Cache é carregado automaticamente pelo hook
       } catch (error) {
         console.error("Erro ao verificar perfil admin:", error);
         router.push("/login");
@@ -686,10 +781,13 @@ export default function Admin() {
     }
   };
 
-  // Carregar contagem inicial quando o componente montar
+  // Carregar registros apenas quando a aba for expandida
   useEffect(() => {
-    loadInitialCount();
-  }, [loadInitialCount]);
+    if (shouldLoadRecords) {
+      loadRecords();
+      setShouldLoadRecords(false); // Reset para evitar recarregamentos
+    }
+  }, [shouldLoadRecords, loadRecords]);
 
   const loadVans = async () => {
     try {
@@ -873,7 +971,7 @@ export default function Admin() {
           dataFechamento: "",
           diarioBordo: "",
         });
-        loadInitialCount();
+        // Cache é carregado automaticamente pelo hook
       } else {
         alert("Erro ao atualizar registro");
       }
@@ -902,7 +1000,7 @@ export default function Admin() {
 
       if (response.ok) {
         alert("Registro deletado com sucesso");
-        loadInitialCount();
+        // Cache é carregado automaticamente pelo hook
       } else {
         alert("Erro ao deletar registro");
       }
@@ -1934,11 +2032,17 @@ export default function Admin() {
 
   const refreshAllData = () => {
     loadUsers();
-    loadInitialCount();
+    refreshRecords(); // Usar refresh do cache
     loadVans();
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
+    // Se está abrindo a seção de registros, carregar registros do dia atual
+    if (section === 'records' && !expandedSections.records) {
+      const defaultFilters = getDefaultFilters();
+      handleSearchRecords(defaultFilters);
+    }
+    
     setExpandedSections((prev) => ({
       ...prev,
       [section]: !prev[section],
@@ -3091,7 +3195,7 @@ export default function Admin() {
           className="section-header"
           onClick={() => toggleSection("records")}
         >
-          <h2>Registros ({totalCount.toLocaleString()})</h2>
+          <h2>Registros</h2>
           <div className="section-actions" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -3127,154 +3231,54 @@ export default function Admin() {
 
         {expandedSections.records && (
           <div>
-            {/* Novo sistema de busca */}
-            <RecordsSearchForm
-              onSearch={applyFilters}
-              onClear={clearFilters}
-              loading={searchLoading}
+            {/* Sistema de Filtro de Registros */}
+            <RecordsFilter
+              filters={searchFilters}
+              onFiltersChange={handleSearchRecords}
+              onClearFilters={handleClearFilters}
               users={users}
               vans={vans}
+              loading={isSearching}
             />
-            
-            <div className="chart-filters" style={{display: 'none'}}>
-              <input
-                type="date"
-                value={recordFilters.startDate}
-                onChange={(e) =>
-                  setRecordFilters((prev) => ({
-                    ...prev,
-                    startDate: e.target.value,
-                  }))
-                }
-                placeholder="Data inicial"
-                className="input"
-              />
-              <input
-                type="date"
-                value={recordFilters.endDate}
-                onChange={(e) =>
-                  setRecordFilters((prev) => ({
-                    ...prev,
-                    endDate: e.target.value,
-                  }))
-                }
-                placeholder="Data final"
-                className="input"
-              />
-              <select
-                value={recordFilters.selectedUser}
-                onChange={(e) =>
-                  setRecordFilters((prev) => ({
-                    ...prev,
-                    selectedUser: e.target.value,
-                  }))
-                }
-                className="input"
-              >
-                <option value="">Todos os usuários</option>
-                {users
-                  .sort((a, b) =>
-                    (a.nome || a.email).localeCompare(b.nome || b.email)
-                  )
-                  .map((user: any) => (
-                    <option key={user.uid} value={user.uid}>
-                      {user.nome || user.email}
-                    </option>
-                  ))}
-              </select>
-              <input
-                type="text"
-                value={recordFilters.rotaSearch}
-                onChange={(e) =>
-                  setRecordFilters((prev) => ({
-                    ...prev,
-                    rotaSearch: e.target.value,
-                  }))
-                }
-                placeholder="Buscar rota (ex: São Paulo, Rio)"
-                className="input"
-              />
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  fontSize: "14px",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={recordFilters.showOnlyOpen}
-                  onChange={(e) =>
-                    setRecordFilters((prev) => ({
-                      ...prev,
-                      showOnlyOpen: e.target.checked,
-                    }))
-                  }
-                />
-                Apenas em aberto
-              </label>
-              <button
-                onClick={() =>
-                  setRecordFilters({
-                    startDate: "",
-                    endDate: "",
-                    selectedUser: "",
-                    showOnlyOpen: false,
-                    rotaSearch: "",
-                  })
-                }
-                className="btn-secondary"
-              >
-                Limpar
-              </button>
-              {/* Modal de Criação de Registro */}
-            </div>
-              <div className="records-table">
-                {/* Indicador de estado */}
-                {!hasSearched && (
+            <div className="records-table">
+
+                {/* Aviso para usar filtros */}
+                {filteredRecords.length === 0 && !isSearching && (
                   <div style={{
                     padding: '40px',
                     textAlign: 'center',
                     backgroundColor: '#f8f9fa',
-                    border: '2px dashed #dee2e6',
                     borderRadius: '8px',
-                    margin: '20px 0'
+                    border: '1px solid #dee2e6'
                   }}>
-                    <h3 style={{ color: '#6c757d', margin: '0 0 10px 0' }}>
-                      🔍 Use os filtros acima para buscar registros
+                    <div style={{ fontSize: '48px', marginBottom: '15px' }}>🔍</div>
+                    <h3 style={{ color: '#6c757d', marginBottom: '10px' }}>
+                      Nenhum registro encontrado
                     </h3>
-                    <p style={{ color: '#6c757d', margin: 0 }}>
-                      Total de registros no banco: <strong>{totalCount.toLocaleString()}</strong>
+                    <p style={{ color: '#6c757d', margin: '0' }}>
+                      Use os filtros acima para buscar registros específicos
                     </p>
                   </div>
                 )}
 
-                {searchError && (
-                  <div style={{
-                    padding: '15px',
-                    backgroundColor: '#f8d7da',
-                    color: '#721c24',
-                    border: '1px solid #f5c6cb',
-                    borderRadius: '4px',
-                    marginBottom: '15px'
-                  }}>
-                    Erro ao buscar registros: {searchError}
-                  </div>
-                )}
-
-                {searchLoading && (
-                  <div style={{
-                    padding: '40px',
-                    textAlign: 'center',
-                    color: '#6c757d'
-                  }}>
-                    Carregando registros...
-                  </div>
-                )}
-
-                {hasSearched && !searchLoading && (
+                {/* Tabela de registros filtrados */}
+                {filteredRecords.length > 0 && (
                   <>
+                    <div style={{
+                      backgroundColor: '#d4edda',
+                      padding: '10px 15px',
+                      borderRadius: '4px',
+                      marginBottom: '15px',
+                      border: '1px solid #c3e6cb'
+                    }}>
+                      <strong>Registros encontrados:</strong> {pagination.total.toLocaleString()} registro(s)
+                      {pagination.totalPages > 1 && (
+                        <span style={{ marginLeft: '10px', color: '#6c757d' }}>
+                          (Página {pagination.page} de {pagination.totalPages})
+                        </span>
+                      )}
+                    </div>
+                    
                     <table>
                       <thead>
                         <tr>
@@ -3292,7 +3296,7 @@ export default function Admin() {
                         </tr>
                       </thead>
                       <tbody>
-                        {records.map((record: any) => {
+                        {filteredRecords.map((record: any) => {
                       const user = users.find((u) => u.uid === record.userId);
                       const distancia =
                         record.fechamento?.kmFinal && record.abertura?.kmInicial
@@ -3358,9 +3362,44 @@ export default function Admin() {
                               ? "-"
                               : `${distancia} km`}
                           </td>
-                          <td>{record.fechamento?.diarioBordo || "-"}</td>
                           <td>
-                            <div className="record-actions">
+                            <div 
+                              style={{
+                                maxWidth: '90px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                cursor: record.fechamento?.diarioBordo && record.fechamento.diarioBordo.length > 30 ? 'help' : 'default',
+                                position: 'relative',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                backgroundColor: record.fechamento?.diarioBordo && record.fechamento.diarioBordo.length > 30 ? '#f8f9fa' : 'transparent',
+                                border: record.fechamento?.diarioBordo && record.fechamento.diarioBordo.length > 30 ? '1px solid #dee2e6' : 'none'
+                              }}
+                              title={record.fechamento?.diarioBordo && record.fechamento.diarioBordo.length > 30 ? 
+                                `📝 Diário de Bordo:\n\n${record.fechamento.diarioBordo}` : 
+                                record.fechamento?.diarioBordo || "-"
+                              }
+                            >
+                              {record.fechamento?.diarioBordo || "-"}
+                              {record.fechamento?.diarioBordo && record.fechamento.diarioBordo.length > 30 && (
+                                <span style={{
+                                  marginLeft: '4px',
+                                  fontSize: '12px',
+                                  color: '#6c757d'
+                                }}>
+                                  📝
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="record-actions" style={{
+                              display: 'flex',
+                              gap: '8px',
+                              alignItems: 'center',
+                              justifyContent: 'flex-start'
+                            }}>
                               <button
                                 onClick={() => {
                                   setEditingRecord(record);
@@ -3396,12 +3435,32 @@ export default function Admin() {
                                   });
                                 }}
                                 className="btn-secondary btn-small"
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  minWidth: '60px',
+                                  backgroundColor: '#6c757d',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
                               >
                                 Editar
                               </button>
                               <button
                                 onClick={() => handleCancelRecord(record)}
                                 className="btn-danger btn-small"
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  minWidth: '60px',
+                                  backgroundColor: '#dc3545',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
                               >
                                 Deletar
                               </button>
@@ -3412,11 +3471,20 @@ export default function Admin() {
                       })}
                       </tbody>
                     </table>
+                    
+                    {/* Paginação - só aparece se houver mais de 50 resultados */}
+                    {pagination.totalPages > 1 && (
+                      <RecordsPagination
+                        pagination={pagination}
+                        onPageChange={handlePageChange}
+                        loading={isSearching}
+                      />
+                    )}
                   </>
                 )}
 
-              {/* Paginação simples */}
-              {hasSearched && records.length > 0 && (
+              {/* Informações do Cache */}
+              {!cacheLoading && records.length > 0 && (
                 <div style={{
                   display: "flex",
                   justifyContent: "center",
@@ -3427,22 +3495,9 @@ export default function Admin() {
                   backgroundColor: "#f8f9fa",
                   borderRadius: "4px"
                 }}>
-                  <button
-                    onClick={() => changePage(1)}
-                    disabled={searchLoading}
-                    className="btn-secondary"
-                  >
-                    Primeira
-                  </button>
-                  <button
-                    onClick={() => changePage(1)}
-                    disabled={searchLoading}
-                    className="btn-secondary"
-                  >
-                    Próxima
-                  </button>
                   <span style={{ color: '#6c757d' }}>
-                    Mostrando {records.length} registros
+                    📦 Exibindo {records.length.toLocaleString()} registros do cache
+                    {cacheStats.isValid ? ' (válido)' : ' (expirado)'}
                   </span>
                 </div>
               )}

@@ -201,6 +201,24 @@ export default function RecordsSearchForm({
         </div>
       </div>
 
+      {/* Aviso importante */}
+      <div style={{
+        backgroundColor: '#fff3cd',
+        border: '1px solid #ffeaa7',
+        borderRadius: '4px',
+        padding: '15px',
+        marginBottom: '15px',
+        color: '#856404'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '18px' }}>⚠️</span>
+          <div>
+            <strong>Atenção:</strong> Para buscar registros, utilize os filtros acima e clique em "Buscar com Filtros". 
+            Isso garantirá que apenas a quantidade filtrada seja carregada, melhorando a performance do sistema.
+          </div>
+        </div>
+      </div>
+
       {/* Botão de Busca */}
       <div style={{ display: 'flex', gap: '10px' }}>
         <button
@@ -216,7 +234,7 @@ export default function RecordsSearchForm({
             opacity: loading ? 0.6 : 1
           }}
         >
-          {loading ? 'Buscando...' : '🔍 Buscar Registros'}
+          {loading ? 'Buscando...' : '🔍 Buscar com Filtros'}
         </button>
       </div>
 

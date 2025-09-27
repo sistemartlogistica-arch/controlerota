@@ -54,9 +54,12 @@ export function useRecordsSearch() {
     setError(null);
 
     try {
+      // Verificar se é busca sem filtros (todos os registros)
+      const hasFilters = Object.values(searchFilters).some(value => value && value !== 'todos');
+      
       const params = new URLSearchParams({
         page: page.toString(),
-        pageSize: '50',
+        pageSize: hasFilters ? '50' : '1000', // Mais registros por página quando sem filtros
         ...Object.fromEntries(
           Object.entries(searchFilters).filter(([_, value]) => value && value !== 'todos')
         )
