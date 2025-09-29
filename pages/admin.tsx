@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { auth, db } from "../lib/firebase";
 import { createUser } from "../lib/auth";
@@ -592,6 +592,15 @@ export default function Admin() {
     endDate: "",
     selectedUser: "",
   });
+  const [jornadasCurrentPage, setJornadasCurrentPage] = useState(1);
+  const [jornadasItemsPerPage] = useState(20);
+  const [jornadasDataLoaded, setJornadasDataLoaded] = useState(false);
+  const [jornadasLoading, setJornadasLoading] = useState(false);
+
+  // Resetar página quando filtros mudarem
+  React.useEffect(() => {
+    setJornadasCurrentPage(1);
+  }, [jornadasFilters]);
   const [showJornadaModal, setShowJornadaModal] = useState(false);
   const [jornadaNormal, setJornadaNormal] = useState("08:00");
   const [exportType, setExportType] = useState("");
@@ -1289,6 +1298,11 @@ export default function Admin() {
   };
 
   const getJornadaDataWithHours = () => {
+    // Se não há filtros de data ou dados não foram carregados, retornar dados vazios
+    if (!jornadasFilters.startDate && !jornadasFilters.endDate) {
+      return [["Nome", "Jornada", "Data", "Horas Trabalhadas", "Jornada Normal", "Diferença"]];
+    }
+
     const filteredRecords = records.filter((record: any) => {
       if (
         jornadasFilters.selectedUser &&
@@ -1380,10 +1394,19 @@ export default function Admin() {
     const data = [];
     data.push(headers);
 
-    // Ordenar por nome alfabeticamente
-    const sortedGroups = Object.values(groupedData).sort((a: any, b: any) =>
-      a.nome.localeCompare(b.nome)
-    );
+    // Ordenar por data (mais antiga primeiro) e depois por nome
+    const sortedGroups = Object.values(groupedData).sort((a: any, b: any) => {
+      const dateA = new Date(a.data.split('/').reverse().join('-'));
+      const dateB = new Date(b.data.split('/').reverse().join('-'));
+      
+      // Primeiro ordena por data (mais antiga primeiro)
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateA.getTime() - dateB.getTime();
+      }
+      
+      // Se a data for igual, ordena por nome
+      return a.nome.localeCompare(b.nome);
+    });
 
     sortedGroups.forEach((group: any) => {
       // Calcular total de horas
@@ -1411,12 +1434,13 @@ export default function Admin() {
       const jornadaCompleta = userJornada
         .map((j: any) => `${j.entrada} - ${j.saida}`)
         .join(", ");
+      
+      // Usar a mesma chave que será usada na renderização
       const jornadaKey = `${group.nome}-${group.data}`;
       const isExpanded = expandedJornadas[jornadaKey];
-      const jornadaTexto =
-        jornadaCompleta.length > 20 && !isExpanded
-          ? jornadaCompleta.substring(0, 17) + "..."
-          : jornadaCompleta;
+      
+      // Sempre mostrar o texto completo da jornada, a lógica de expansão será feita na renderização
+      const jornadaTexto = jornadaCompleta;
 
       // Calcular total de minutos da jornada normal do usuário
       let jornadaNormalMinutos = 0;
@@ -1446,7 +1470,7 @@ export default function Admin() {
 
       const row = [group.nome, jornadaTexto, group.data];
 
-      // Adicionar entradas e saídas em ordem cronológica
+    
       for (let i = 0; i < maxHorarios; i++) {
         if (i < group.horarios.length) {
           row.push(group.horarios[i].entradaTexto);
@@ -1462,6 +1486,41 @@ export default function Admin() {
     });
 
     return data;
+  };
+
+  const loadJornadasData = async () => {
+    if (!jornadasFilters.startDate && !jornadasFilters.endDate) {
+      return;
+    }
+
+    setJornadasLoading(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setJornadasDataLoaded(true);
+    } catch (error) {
+      console.error('Erro ao carregar dados de jornadas:', error);
+    } finally {
+      setJornadasLoading(false);
+    }
+  };
+
+  const getJornadaDataWithHoursPaginated = () => {
+    const allData = getJornadaDataWithHours();
+    const headers = allData[0] || [];
+    const dataRows = allData.slice(1);
+    
+    const startIndex = (jornadasCurrentPage - 1) * jornadasItemsPerPage;
+    const endIndex = startIndex + jornadasItemsPerPage;
+    const paginatedRows = dataRows.slice(startIndex, endIndex);
+    
+    return {
+      headers,
+      data: [headers, ...paginatedRows],
+      totalPages: Math.ceil(dataRows.length / jornadasItemsPerPage),
+      totalItems: dataRows.length,
+      currentPage: jornadasCurrentPage,
+      itemsPerPage: jornadasItemsPerPage
+    };
   };
 
   const exportJornadasCSV = (): void => {
@@ -1675,58 +1734,139 @@ export default function Admin() {
             Limpar
           </button>
         </div>
-        <div className="jornadas-scroll-container">
-          {/* Scroll horizontal superior */}
-          <div
-            className="jornadas-top-scroll"
-            ref={(el) => {
-              if (el) {
-                const bottomScroll = el.parentElement?.querySelector(
-                  ".jornadas-bottom-scroll"
-                );
-                el.onscroll = () => {
-                  if (bottomScroll) {
-                    bottomScroll.scrollLeft = el.scrollLeft;
-                  }
-                };
-              }
-            }}
-          >
+        
+        {/* Aviso quando não há período selecionado */}
+        {!jornadasFilters.startDate && !jornadasFilters.endDate && (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 20px',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffeaa7',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            color: '#856404'
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '18px' }}>
+              ⚠️ Selecione o período para gerar relatório
+            </h3>
+            <p style={{ margin: '0 0 20px 0', fontSize: '14px' }}>
+              Escolha uma data de início e/ou fim para visualizar os dados de jornadas
+            </p>
+          </div>
+        )}
+
+        {/* Botão para gerar relatório quando há período selecionado */}
+        {(jornadasFilters.startDate || jornadasFilters.endDate) && !jornadasDataLoaded && !jornadasLoading && (
+          <div style={{
+            textAlign: 'center',
+            padding: '20px',
+            backgroundColor: '#e7f3ff',
+            border: '1px solid #b3d9ff',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <p style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#0066cc' }}>
+              Período selecionado. Clique no botão abaixo para gerar o relatório:
+            </p>
+            <button
+              onClick={loadJornadasData}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '16px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              📊 Gerar Relatório de Jornadas
+            </button>
+          </div>
+        )}
+
+        {/* Estado de carregamento */}
+        {jornadasLoading && (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 20px',
+            backgroundColor: '#f8f9fa',
+            border: '1px solid #dee2e6',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <div style={{
+              display: 'inline-block',
+              width: '40px',
+              height: '40px',
+              border: '4px solid #f3f3f3',
+              borderTop: '4px solid #007bff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              marginBottom: '15px'
+            }}></div>
+            <p style={{ margin: '0', fontSize: '16px', color: '#6c757d' }}>
+              Carregando dados de jornadas...
+            </p>
+          </div>
+        )}
+        
+        {/* Tabela só aparece quando dados foram carregados */}
+        {jornadasDataLoaded && !jornadasLoading && (
+          <>
+          <div className="jornadas-scroll-container">
+            {/* Scroll horizontal superior */}
             <div
-              className="jornadas-top-scroll-content"
+              className="jornadas-top-scroll"
               ref={(el) => {
                 if (el) {
-                  const table =
-                    el.parentElement?.parentElement?.querySelector("table");
-                  if (table) {
-                    el.style.width = table.scrollWidth + "px";
-                  }
+                  const bottomScroll = el.parentElement?.querySelector(
+                    ".jornadas-bottom-scroll"
+                  );
+                  el.onscroll = () => {
+                    if (bottomScroll) {
+                      bottomScroll.scrollLeft = el.scrollLeft;
+                    }
+                  };
                 }
               }}
-            ></div>
-          </div>
-
-          {/* Tabela com scroll inferior */}
-          <div
-            className="jornadas-bottom-scroll records-table"
-            ref={(el) => {
-              if (el) {
-                const topScroll = el.parentElement?.querySelector(
-                  ".jornadas-top-scroll"
-                );
-                el.onscroll = () => {
-                  if (topScroll) {
-                    topScroll.scrollLeft = el.scrollLeft;
+            >
+              <div
+                className="jornadas-top-scroll-content"
+                ref={(el) => {
+                  if (el) {
+                    const table =
+                      el.parentElement?.parentElement?.querySelector("table");
+                    if (table) {
+                      el.style.width = table.scrollWidth + "px";
+                    }
                   }
-                };
-              }
-            }}
-          >
-            <table className="jornadas-table">
+                }}
+              ></div>
+            </div>
+
+            {/* Tabela com scroll inferior */}
+            <div
+              className="jornadas-bottom-scroll records-table"
+              ref={(el) => {
+                if (el) {
+                  const topScroll = el.parentElement?.querySelector(
+                    ".jornadas-top-scroll"
+                  );
+                  el.onscroll = () => {
+                    if (topScroll) {
+                      topScroll.scrollLeft = el.scrollLeft;
+                    }
+                  };
+                }
+              }}
+            >
+              <table className="jornadas-table">
               <thead>
                 {(() => {
-                  const data = getJornadaDataWithHours();
-                  const headers = data[0] || [];
+                  const paginatedData = getJornadaDataWithHoursPaginated();
+                  const headers = paginatedData.headers;
                   return (
                     <tr>
                       {headers.map((header: string, index: number) => {
@@ -1755,8 +1895,9 @@ export default function Admin() {
               </thead>
               <tbody>
                 {(() => {
-                  const data = getJornadaDataWithHours();
-                  const headers = data[0] || [];
+                  const paginatedData = getJornadaDataWithHoursPaginated();
+                  const data = paginatedData.data;
+                  const headers = paginatedData.headers;
                   return data.slice(1).map((row: any, index: number) => {
                     const jornadaKey = `${row[0]}-${row[2]}`;
                     return (
@@ -1764,11 +1905,11 @@ export default function Admin() {
                         {row.map((cell: any, cellIndex: number) => {
                           if (cellIndex === 1) {
                             // Coluna Jornada
-                            const isLong = cell.length > 15;
+                            const isLong = cell.length > 20;
                             const isExpanded = expandedJornadas[jornadaKey];
                             const displayText =
                               isLong && !isExpanded
-                                ? cell.substring(0, 12)
+                                ? cell.substring(0, 17) + "..."
                                 : cell;
                             return (
                               <td
@@ -1830,7 +1971,133 @@ export default function Admin() {
               </tbody>
             </table>
           </div>
-        </div>
+          
+          {/* Controles de Paginação */}
+          {(() => {
+            const paginatedData = getJornadaDataWithHoursPaginated();
+            const { totalPages, totalItems, currentPage, itemsPerPage } = paginatedData;
+            
+            if (totalPages <= 1) return null;
+            
+            const startItem = (currentPage - 1) * itemsPerPage + 1;
+            const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+            
+            return (
+              <div className="pagination-controls" style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '15px 20px',
+                backgroundColor: '#f8f9fa',
+                borderTop: '1px solid #dee2e6',
+                marginTop: '10px'
+              }}>
+                <div className="pagination-info" style={{ fontSize: '14px', color: '#6c757d' }}>
+                  Mostrando {startItem} a {endItem} de {totalItems} registros
+                </div>
+                
+                <div className="pagination-buttons" style={{ display: 'flex', gap: '5px' }}>
+                  <button
+                    onClick={() => setJornadasCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #dee2e6',
+                      backgroundColor: currentPage === 1 ? '#f8f9fa' : '#fff',
+                      color: currentPage === 1 ? '#6c757d' : '#007bff',
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                      borderRadius: '4px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Primeira
+                  </button>
+                  
+                  <button
+                    onClick={() => setJornadasCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #dee2e6',
+                      backgroundColor: currentPage === 1 ? '#f8f9fa' : '#fff',
+                      color: currentPage === 1 ? '#6c757d' : '#007bff',
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                      borderRadius: '4px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Anterior
+                  </button>
+                  
+                  <span style={{
+                    padding: '8px 12px',
+                    backgroundColor: '#007bff',
+                    color: '#fff',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}>
+                    {currentPage} de {totalPages}
+                  </span>
+                  
+                  <button
+                    onClick={() => setJornadasCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #dee2e6',
+                      backgroundColor: currentPage === totalPages ? '#f8f9fa' : '#fff',
+                      color: currentPage === totalPages ? '#6c757d' : '#007bff',
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                      borderRadius: '4px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Próxima
+                  </button>
+                  
+                  <button
+                    onClick={() => setJornadasCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    style={{
+                      padding: '8px 12px',
+                      border: '1px solid #dee2e6',
+                      backgroundColor: currentPage === totalPages ? '#f8f9fa' : '#fff',
+                      color: currentPage === totalPages ? '#6c757d' : '#007bff',
+                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                      borderRadius: '4px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Última
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+          </div>
+          
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <button
+              onClick={() => {
+                setJornadasDataLoaded(false);
+                setJornadasCurrentPage(1);
+              }}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Limpar Relatório
+            </button>
+          </div>
+        </>
+        )}
       </div>
     );
   }
