@@ -6,6 +6,7 @@ import { getAllRecords } from "../lib/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import RegistroModalCompleto from "@/components/newRegisterModal";
+import RegistrosCount from "@/components/RegistrosCount";
 
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
@@ -3357,7 +3358,7 @@ export default function Admin() {
           className="section-header"
           onClick={() => toggleSection("records")}
         >
-          <h2>Registros ({records.length})</h2>
+          <h2>Registros (<RegistrosCount/>)</h2>
           <div className="section-actions" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -3393,6 +3394,8 @@ export default function Admin() {
 
         {expandedSections.records && (
           <div>
+            {/* Contagem total de registros */}
+            
             <div className="chart-filters">
               <input
                 type="date"
