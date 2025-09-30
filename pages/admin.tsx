@@ -537,6 +537,7 @@ export default function Admin() {
   ]);
   const [userFilter, setUserFilter] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState<{ [key: string]: boolean }>({});
   const [expandedSections, setExpandedSections] = useState({
     createUser: false,
     vans: false,
@@ -878,7 +879,9 @@ export default function Admin() {
     )
       return;
 
-    setLoading(true);
+    // Ativar loading específico para este usuário
+    setLoadingUsers(prev => ({ ...prev, [user.uid]: true }));
+    
     try {
       const response = await fetch("/api/users/toggle-active", {
         method: "POST",
@@ -900,7 +903,8 @@ export default function Admin() {
     } catch (error) {
       alert(`Erro ao ${action} usuário`);
     } finally {
-      setLoading(false);
+      // Desativar loading específico para este usuário
+      setLoadingUsers(prev => ({ ...prev, [user.uid]: false }));
     }
   };
 
@@ -3209,9 +3213,21 @@ export default function Admin() {
                       </button>
                       <button
                         onClick={() => handleToggleUserActive(user)}
+                        disabled={loadingUsers[user.uid]}
                         className={user.ativo === true ? "btn-warning" : user.ativo === false ? "btn-success" : "btn-warning"}
+                        style={{
+                          opacity: loadingUsers[user.uid] ? 0.6 : 1,
+                          cursor: loadingUsers[user.uid] ? 'not-allowed' : 'pointer'
+                        }}
                       >
-                        {user.ativo === true ? "Inativar" : user.ativo === false ? "Ativar" : "Inativar"}
+                        {loadingUsers[user.uid] ? (
+                          <>
+                            <span style={{ marginRight: '8px' }}>⏳</span>
+                            {user.ativo === true ? "Inativando..." : user.ativo === false ? "Ativando..." : "Inativando..."}
+                          </>
+                        ) : (
+                          user.ativo === true ? "Inativar" : user.ativo === false ? "Ativar" : "Inativar"
+                        )}
                       </button>
                     </div>
                   </div>
