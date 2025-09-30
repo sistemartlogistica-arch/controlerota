@@ -83,10 +83,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(400).json({ error: 'Failed to create record' });
     }
   } else if (req.method === 'GET') {
-    const { userId, page = 1 } = req.query;
+    const { userId, page = 1, limit = 50, onlyOpen = false, getAll = false } = req.query;
     
     // Criar chave de cache baseada nos parâmetros
-    const cacheKey = userId ? `records_${userId}` : 'records_all';
+    const cacheKey = userId ? `records_${userId}_${page}_${limit}_${onlyOpen}_${getAll}` : `records_all_${page}_${limit}_${onlyOpen}_${getAll}`;
     
     // Verificar cache
     const now = Date.now();
@@ -99,12 +99,73 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       let query = db.collection('registros');
       
+      // Aplicar filtros
       if (userId) {
         query = query.where('userId', '==', userId) as any;
       }
       
+      // Filtro para registros abertos apenas (para otimizar consulta de vans)
+      if (onlyOpen === 'true') {
+        query = query.where('fechamento', '==', null) as any;
+      }
+      
+      // Adicionar ordenação
+      query = query.orderBy('abertura.dataHora', 'desc') as any;
+      
+      // Se getAll=true, retornar todos os registros (sem paginação)
+      if (getAll === 'true') {
+        const snapshot = await query.get();
+        let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        
+        // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
+        if (!userId) {
+          const activeUsersSnapshot = await db.collection('usuarios')
+            .where('ativo', '==', true)
+            .get();
+          const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
+          
+          // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
+          const allUsersSnapshot = await db.collection('usuarios').get();
+          const usersWithoutActiveField = allUsersSnapshot.docs
+            .filter(doc => !doc.data().hasOwnProperty('ativo'))
+            .map(doc => doc.id);
+          
+          const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+          records = records.filter(record => allActiveUserIds.includes(record.userId));
+        }
+        
+        // Atualizar cache
+        recordsCache[cacheKey] = { data: records, time: now };
+        
+        return res.status(200).json(records);
+      }
+      
+      // Paginação normal
+      const pageNum = parseInt(page as string) || 1;
+      const limitNum = parseInt(limit as string) || 50;
+      const offset = (pageNum - 1) * limitNum;
+      
+      query = query.offset(offset).limit(limitNum) as any;
+      
       const snapshot = await query.get();
-      const records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      
+      // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
+      if (!userId) {
+        const activeUsersSnapshot = await db.collection('usuarios')
+          .where('ativo', '==', true)
+          .get();
+        const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
+        
+        // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
+        const allUsersSnapshot = await db.collection('usuarios').get();
+        const usersWithoutActiveField = allUsersSnapshot.docs
+          .filter(doc => !doc.data().hasOwnProperty('ativo'))
+          .map(doc => doc.id);
+        
+        const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+        records = records.filter(record => allActiveUserIds.includes(record.userId));
+      }
       
       // Atualizar cache
       recordsCache[cacheKey] = { data: records, time: now };
