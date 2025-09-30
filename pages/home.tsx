@@ -123,13 +123,14 @@ export default function Home() {
       // Filtrar vans baseado no tipo de usuário
       if (userTipo === 'motorista') {
         // Para motoristas: remover vans que já têm motorista ativo
-        const registrosResponse = await fetch('/api/records');
+        // Usar API otimizada que busca apenas registros abertos
+        const registrosResponse = await fetch('/api/records/open');
         const registros = await registrosResponse.json();
         
         const vansDisponiveis = vansData.filter((van: any) => {
           const temMotoristaAtivo = registros.some((registro: any) => {
             const isMotorista = !registro.userTipo || registro.userTipo === 'motorista';
-            return registro.vanId === van.id && !registro.fechamento && isMotorista;
+            return registro.vanId === van.id && isMotorista;
           });
           return !temMotoristaAtivo;
         });
