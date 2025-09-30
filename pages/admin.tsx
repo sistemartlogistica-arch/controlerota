@@ -6,6 +6,7 @@ import { getAllRecords } from "../lib/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import RegistroModalCompleto from "@/components/newRegisterModal";
+import RegistrosCount from "@/components/RegistrosCount";
 
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
@@ -684,9 +685,20 @@ export default function Admin() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
+  const [showAllRecords, setShowAllRecords] = useState(false);
 
   const loadRecords = async () => {
-    const recordsData = await getAllRecords(); // Carregar mais registros
+    let recordsData;
+    
+    if (showAllRecords) {
+      // Usar API para buscar todos os registros
+      const response = await fetch('/api/records?getAll=true');
+      recordsData = await response.json();
+    } else {
+      // Usar função local com paginação
+      recordsData = await getAllRecords(currentPage, recordsPerPage);
+    }
+    
     // Ordenar por nome do usuário
     const sortedRecords = recordsData.sort((a: any, b: any) => {
       const userA = users.find((u) => u.uid === a.userId);
@@ -697,6 +709,13 @@ export default function Admin() {
     });
     setRecords(sortedRecords);
   };
+
+  // Recarregar registros quando a página mudar ou modo de exibição mudar
+  useEffect(() => {
+    if (users.length > 0) {
+      loadRecords();
+    }
+  }, [currentPage, users, showAllRecords]);
 
   const loadVans = async () => {
     try {
@@ -839,6 +858,47 @@ export default function Admin() {
       }
     } catch (error) {
       alert("Erro ao deletar usuário");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleUserActive = async (user: any) => {
+    const isCurrentlyActive = user.ativo === true || user.ativo === undefined;
+    const action = isCurrentlyActive ? 'inativar' : 'ativar';
+    
+    if (
+      !confirm(
+        `Tem certeza que deseja ${action} o usuário ${user.email}?\n\n${
+          isCurrentlyActive 
+            ? 'Usuários inativos não aparecerão em registros e relatórios.' 
+            : 'Usuários ativos voltarão a aparecer em registros e relatórios.'
+        }`
+      )
+    )
+      return;
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/users/toggle-active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          userId: user.uid, 
+          ativo: !isCurrentlyActive 
+        }),
+      });
+
+      if (response.ok) {
+        alert(`Usuário ${action}do com sucesso`);
+        loadUsers();
+        loadRecords(); // Recarregar registros para refletir mudanças
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || `Erro ao ${action} usuário`);
+      }
+    } catch (error) {
+      alert(`Erro ao ${action} usuário`);
     } finally {
       setLoading(false);
     }
@@ -3066,6 +3126,9 @@ export default function Admin() {
                             {formatUserType(user.tipo)}
                           </span>
                         )}
+                        <span className={`badge ${user.ativo === true ? 'ativo' : user.ativo === false ? 'inativo' : 'ativo'}`}>
+                          {user.ativo === true ? 'Ativo' : user.ativo === false ? 'Inativo' : 'Ativo'}
+                        </span>
                         {user.jornada && user.jornada.length > 0 && (
                           <span
                             className="badge"
@@ -3145,10 +3208,10 @@ export default function Admin() {
                         Alterar Jornada
                       </button>
                       <button
-                        onClick={() => handleDeleteUser(user)}
-                        className="btn-danger"
+                        onClick={() => handleToggleUserActive(user)}
+                        className={user.ativo === true ? "btn-warning" : user.ativo === false ? "btn-success" : "btn-warning"}
                       >
-                        Deletar
+                        {user.ativo === true ? "Inativar" : user.ativo === false ? "Ativar" : "Inativar"}
                       </button>
                     </div>
                   </div>
@@ -3357,7 +3420,7 @@ export default function Admin() {
           className="section-header"
           onClick={() => toggleSection("records")}
         >
-          <h2>Registros ({records.length})</h2>
+          <h2>Registros (<RegistrosCount/>)</h2>
           <div className="section-actions" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -3393,6 +3456,8 @@ export default function Admin() {
 
         {expandedSections.records && (
           <div>
+            {/* Contagem total de registros */}
+            
             <div className="chart-filters">
               <input
                 type="date"
@@ -3485,6 +3550,26 @@ export default function Admin() {
               >
                 Limpar
               </button>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "14px",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showAllRecords}
+                  onChange={(e) => {
+                    setShowAllRecords(e.target.checked);
+                    if (e.target.checked) {
+                      setCurrentPage(1); // Reset para página 1 quando ativar modo completo
+                    }
+                  }}
+                />
+                Mostrar todos os registros
+              </label>
               {/* Modal de Criação de Registro */}
             </div>
             <div className="records-table">
@@ -3552,10 +3637,6 @@ export default function Admin() {
 
                       return true;
                     })
-                    .slice(
-                      (currentPage - 1) * recordsPerPage,
-                      currentPage * recordsPerPage
-                    )
                     .map((record: any) => {
                       const user = users.find((u) => u.uid === record.userId);
                       const distancia =
@@ -3677,96 +3758,60 @@ export default function Admin() {
                 </tbody>
               </table>
 
-              {/* Paginação */}
-              {(() => {
-                const filteredRecordsForPagination = records.filter(
-                  (record: any) => {
-                    if (
-                      recordFilters.selectedUser &&
-                      record.userId !== recordFilters.selectedUser
-                    ) {
-                      return false;
+              {/* Paginação - só aparece no modo paginado */}
+              {!showAllRecords && (
+                <div
+                  className="pagination"
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: "10px",
+                    marginTop: "20px",
+                  }}
+                >
+                  <button
+                    onClick={() =>
+                      setCurrentPage(Math.max(1, currentPage - 1))
                     }
-
-                    if (recordFilters.startDate || recordFilters.endDate) {
-                      const recordDate = new Date(record.abertura?.dataHora);
-
-                      if (recordFilters.startDate) {
-                        const startDate = new Date(
-                          recordFilters.startDate + "T00:00:00-03:00"
-                        );
-                        if (recordDate < startDate) {
-                          return false;
-                        }
-                      }
-                      if (recordFilters.endDate) {
-                        const endDate = new Date(
-                          recordFilters.endDate + "T23:59:59-03:00"
-                        );
-                        if (recordDate > endDate) {
-                          return false;
-                        }
-                      }
-                    }
-
-                    if (recordFilters.showOnlyOpen && record.fechamento) {
-                      return false;
-                    }
-
-                    if (recordFilters.rotaSearch) {
-                      const rota = `${record.origem || ""} ${
-                        record.destino || ""
-                      }`.toLowerCase();
-                      if (
-                        !rota.includes(recordFilters.rotaSearch.toLowerCase())
-                      ) {
-                        return false;
-                      }
-                    }
-
-                    return true;
-                  }
-                );
-
-                const totalPages = Math.ceil(
-                  filteredRecordsForPagination.length / recordsPerPage
-                );
-
-                return (
-                  <div
-                    className="pagination"
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      gap: "10px",
-                      marginTop: "20px",
-                    }}
+                    disabled={currentPage === 1}
+                    className="btn-secondary"
                   >
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.max(1, currentPage - 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="btn-secondary"
-                    >
-                      Anterior
-                    </button>
-                    <span>
-                      Página {currentPage} de {totalPages}
-                    </span>
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.min(totalPages, currentPage + 1))
-                      }
-                      disabled={currentPage >= totalPages}
-                      className="btn-secondary"
-                    >
-                      Próxima
-                    </button>
-                  </div>
-                );
-              })()}
+                    Anterior
+                  </button>
+                  <span>
+                    Página {currentPage}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setCurrentPage(currentPage + 1)
+                    }
+                    disabled={records.length < recordsPerPage}
+                    className="btn-secondary"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              )}
+              
+              {/* Informação sobre modo completo */}
+              {showAllRecords && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    marginTop: "20px",
+                    padding: "10px",
+                    backgroundColor: "#f0f8ff",
+                    border: "1px solid #4a90e2",
+                    borderRadius: "5px",
+                    color: "#2c5aa0",
+                  }}
+                >
+                  <strong>Modo Completo Ativo:</strong> Exibindo todos os {records.length} registros. 
+                  <br />
+                  <small>⚠️ Nota: Este modo consome mais recursos do Firestore.</small>
+                </div>
+              )}
             </div>
           </div>
         )}

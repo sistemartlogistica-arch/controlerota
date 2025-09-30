@@ -12,7 +12,9 @@ export const createUser = async (email: string, password: string) => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
     uid: userCredential.user.uid,
-    perfil: 'user'
+    perfil: 'user',
+    ativo: true,
+    criadoEm: new Date().toISOString()
   });
   return userCredential.user;
 };

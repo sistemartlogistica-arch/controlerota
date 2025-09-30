@@ -22,7 +22,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       nome: nome || '',
       perfil: perfil || 'user',
       tipo: tipo || 'motorista',
-      jornada: jornada || [{entrada: '08:00', saida: '17:00'}]
+      jornada: jornada || [{entrada: '08:00', saida: '17:00'}],
+      ativo: true,
+      criadoEm: new Date().toISOString()
     });
 
     res.status(201).json({ uid: userRecord.uid, email: userRecord.email });

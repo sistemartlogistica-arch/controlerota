@@ -1,6 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
 
+// Função para invalidar cache de vans
+function invalidateVansCache() {
+  // Limpar cache global se existir
+  if (typeof global !== 'undefined' && (global as any).vansCache) {
+    (global as any).vansCache = null;
+    (global as any).vansCacheTime = 0;
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -18,6 +27,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await db.collection('vans').doc(id).update({
       placa: placa
     });
+
+    // Invalidar cache de vans para forçar atualização
+    invalidateVansCache();
 
     res.status(200).json({ success: true });
   } catch (error) {

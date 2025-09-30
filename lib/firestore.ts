@@ -30,31 +30,53 @@ export const getOpenRecord = async (userId: string) => {
   return openRecord ? { id: openRecord.id, ...openRecord.data() } : null;
 };
 
-export const getAllRecords = async () => {
+export const getAllRecords = async (page = 1, pageSize = 100) => {
   const records: any[] = [];
-  let lastDoc: any = null;
-  let hasMore = true;
+  const pageNum = parseInt(page.toString()) || 1;
+  const limitNum = parseInt(pageSize.toString()) || 100;
+  const offset = (pageNum - 1) * limitNum;
 
-  while (hasMore) {
-    let q = query(
+  let q = query(
+    collection(db, 'registros'),
+    orderBy('abertura.dataHora', 'desc'),
+    limit(limitNum)
+  );
+
+  if (offset > 0) {
+    // Para paginação, precisamos buscar documentos anteriores
+    let tempQuery = query(
       collection(db, 'registros'),
-      // orderBy('abertura.dataHora', 'desc'),
-      limit(500) // traz em lotes de 500
+      orderBy('abertura.dataHora', 'desc'),
+      limit(offset)
     );
-
-    if (lastDoc) {
+    
+    const tempSnapshot = await getDocs(tempQuery);
+    if (!tempSnapshot.empty) {
+      const lastDoc = tempSnapshot.docs[tempSnapshot.docs.length - 1];
       q = query(q, startAfter(lastDoc));
     }
-
-    const snapshot = await getDocs(q);
-
-    if (snapshot.empty) {
-      hasMore = false;
-    } else {
-      records.push(...snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      lastDoc = snapshot.docs[snapshot.docs.length - 1];
-    }
   }
+
+  const snapshot = await getDocs(q);
+  let allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
+  const activeUsersQuery = query(
+    collection(db, 'usuarios'),
+    where('ativo', '==', true)
+  );
+  const activeUsersSnapshot = await getDocs(activeUsersQuery);
+  const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
+  
+  // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
+  const allUsersSnapshot = await getDocs(collection(db, 'usuarios'));
+  const usersWithoutActiveField = allUsersSnapshot.docs
+    .filter(doc => !doc.data().hasOwnProperty('ativo'))
+    .map(doc => doc.id);
+  
+  const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+  const filteredRecords = allRecords.filter((record: any) => allActiveUserIds.includes(record.userId));
+  records.push(...filteredRecords);
 
   return records;
 };
