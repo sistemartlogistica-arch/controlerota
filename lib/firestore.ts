@@ -68,7 +68,14 @@ export const getAllRecords = async (page = 1, pageSize = 100) => {
   const activeUsersSnapshot = await getDocs(activeUsersQuery);
   const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
   
-  const filteredRecords = allRecords.filter((record: any) => activeUserIds.includes(record.userId));
+  // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
+  const allUsersSnapshot = await getDocs(collection(db, 'usuarios'));
+  const usersWithoutActiveField = allUsersSnapshot.docs
+    .filter(doc => !doc.data().hasOwnProperty('ativo'))
+    .map(doc => doc.id);
+  
+  const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+  const filteredRecords = allRecords.filter((record: any) => allActiveUserIds.includes(record.userId));
   records.push(...filteredRecords);
 
   return records;

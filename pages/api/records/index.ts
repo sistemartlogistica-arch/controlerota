@@ -123,7 +123,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .where('ativo', '==', true)
             .get();
           const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
-          records = records.filter(record => activeUserIds.includes(record.userId));
+          
+          // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
+          const allUsersSnapshot = await db.collection('usuarios').get();
+          const usersWithoutActiveField = allUsersSnapshot.docs
+            .filter(doc => !doc.data().hasOwnProperty('ativo'))
+            .map(doc => doc.id);
+          
+          const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+          records = records.filter(record => allActiveUserIds.includes(record.userId));
         }
         
         // Atualizar cache
@@ -148,7 +156,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .where('ativo', '==', true)
           .get();
         const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
-        records = records.filter(record => activeUserIds.includes(record.userId));
+        
+        // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
+        const allUsersSnapshot = await db.collection('usuarios').get();
+        const usersWithoutActiveField = allUsersSnapshot.docs
+          .filter(doc => !doc.data().hasOwnProperty('ativo'))
+          .map(doc => doc.id);
+        
+        const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+        records = records.filter(record => allActiveUserIds.includes(record.userId));
       }
       
       // Atualizar cache

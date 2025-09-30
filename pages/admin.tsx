@@ -864,7 +864,7 @@ export default function Admin() {
   };
 
   const handleToggleUserActive = async (user: any) => {
-    const isCurrentlyActive = user.ativo !== false;
+    const isCurrentlyActive = user.ativo === true || user.ativo === undefined;
     const action = isCurrentlyActive ? 'inativar' : 'ativar';
     
     if (
@@ -3126,8 +3126,8 @@ export default function Admin() {
                             {formatUserType(user.tipo)}
                           </span>
                         )}
-                        <span className={`badge ${user.ativo !== false ? 'ativo' : 'inativo'}`}>
-                          {user.ativo !== false ? 'Ativo' : 'Inativo'}
+                        <span className={`badge ${user.ativo === true ? 'ativo' : user.ativo === false ? 'inativo' : 'ativo'}`}>
+                          {user.ativo === true ? 'Ativo' : user.ativo === false ? 'Inativo' : 'Ativo'}
                         </span>
                         {user.jornada && user.jornada.length > 0 && (
                           <span
@@ -3209,9 +3209,9 @@ export default function Admin() {
                       </button>
                       <button
                         onClick={() => handleToggleUserActive(user)}
-                        className={user.ativo !== false ? "btn-warning" : "btn-success"}
+                        className={user.ativo === true ? "btn-warning" : user.ativo === false ? "btn-success" : "btn-warning"}
                       >
-                        {user.ativo !== false ? "Inativar" : "Ativar"}
+                        {user.ativo === true ? "Inativar" : user.ativo === false ? "Ativar" : "Inativar"}
                       </button>
                     </div>
                   </div>
