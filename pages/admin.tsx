@@ -893,7 +893,8 @@ export default function Admin() {
       });
 
       if (response.ok) {
-        alert(`Usuário ${action}do com sucesso`);
+        const successMessage = isCurrentlyActive ? 'Usuário inativado com sucesso' : 'Usuário ativado com sucesso';
+        alert(successMessage);
         loadUsers();
         loadRecords(); // Recarregar registros para refletir mudanças
       } else {
