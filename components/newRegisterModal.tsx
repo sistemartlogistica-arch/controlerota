@@ -24,54 +24,72 @@ export default function RegistroModalCompleto({
   const [newRecordHoraFechamento, setNewRecordHoraFechamento] = useState("");
   const [newRecordKmInicial, setNewRecordKmInicial] = useState("");
   const [newRecordKmFinal, setNewRecordKmFinal] = useState("");
-  const [newRecordDiarioBordo, setNewRecordDiarioBordo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Obter o tipo do usuário selecionado
+  const selectedUser = users.find(u => u.uid === newRecordUserId);
+  const userType = selectedUser?.tipo || 'motorista';
+  const isMotorista = userType === 'motorista';
+  const isCopiloto = userType === 'copiloto';
+
 
   const handleCreateRecord = async () => {
-    if (
-      !newRecordUserId ||
-      !newRecordVanId ||
-      !newRecordRotaId ||
-      !newRecordKmInicial ||
-      !newRecordKmFinal ||
-      !newRecordDataAbertura ||
-      !newRecordHoraAbertura ||
-      !newRecordDataFechamento ||
-      !newRecordHoraFechamento
-    ) {
+    // Validações básicas
+    if (!newRecordUserId || !newRecordDataAbertura || !newRecordHoraAbertura || !newRecordDataFechamento || !newRecordHoraFechamento) {
       setError("Preencha todos os campos obrigatórios!");
       return;
     }
 
-    const kmInicial = parseInt(newRecordKmInicial);
-    const kmFinal = parseInt(newRecordKmFinal);
+    // Validações específicas para motorista
+    if (isMotorista) {
+      if (!newRecordVanId || !newRecordRotaId || !newRecordKmInicial || !newRecordKmFinal) {
+        setError("Para motoristas, preencha van, rota, KM inicial e KM final!");
+        return;
+      }
 
-    if (kmFinal <= kmInicial) {
-      setError("KM final deve ser maior que KM inicial!");
-      return;
+      const kmInicial = parseInt(newRecordKmInicial);
+      const kmFinal = parseInt(newRecordKmFinal);
+
+      if (kmFinal <= kmInicial) {
+        setError("KM final deve ser maior que KM inicial!");
+        return;
+      }
+    }
+
+    // Validações específicas para copiloto
+    if (isCopiloto) {
+      if (!newRecordRotaId) {
+        setError("Para copilotos, selecione uma rota!");
+        return;
+      }
     }
 
     setLoading(true);
     setError("");
 
     try {
+      // Preparar dados baseado no tipo do usuário
+      const requestData: any = {
+        userId: newRecordUserId,
+        rotaId: newRecordRotaId,
+        dataAbertura: newRecordDataAbertura,
+        horaAbertura: newRecordHoraAbertura,
+        dataFechamento: newRecordDataFechamento,
+        horaFechamento: newRecordHoraFechamento,
+      };
+
+      // Adicionar campos específicos para motorista
+      if (isMotorista) {
+        requestData.vanId = newRecordVanId;
+        requestData.kmInicial = parseInt(newRecordKmInicial);
+        requestData.kmFinal = parseInt(newRecordKmFinal);
+      }
+
       const response = await fetch("/api/records/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: newRecordUserId,
-          vanId: newRecordVanId,
-          rotaId: newRecordRotaId,
-          kmInicial: kmInicial,
-          kmFinal: kmFinal,
-          dataAbertura: newRecordDataAbertura,
-          horaAbertura: newRecordHoraAbertura,
-          dataFechamento: newRecordDataFechamento,
-          horaFechamento: newRecordHoraFechamento,
-          diarioBordo: newRecordDiarioBordo || null,
-        }),
+        body: JSON.stringify(requestData),
       });
 
       if (response.ok) {
@@ -127,31 +145,42 @@ export default function RegistroModalCompleto({
         <label>Usuário:</label>
         <select
           value={newRecordUserId}
-          onChange={(e) => setNewRecordUserId(e.target.value)}
+          onChange={(e) => {
+            setNewRecordUserId(e.target.value);
+            // Limpar campos específicos quando mudar usuário
+            setNewRecordVanId("");
+            setNewRecordKmInicial("");
+            setNewRecordKmFinal("");
+          }}
           style={selectStyle}
         >
           <option value="">Selecione um usuário</option>
           {users.map((u) => (
             <option key={u.uid} value={u.uid}>
-              {u.nome || u.email}
+              {u.nome || u.email} ({u.tipo === 'copiloto' ? 'Monitora' : 'Motorista'})
             </option>
           ))}
         </select>
 
-        {/* Van */}
-        <label style={{ marginTop: "15px" }}>Van:</label>
-        <select
-          value={newRecordVanId}
-          onChange={(e) => setNewRecordVanId(e.target.value)}
-          style={selectStyle}
-        >
-          <option value="">Selecione uma van</option>
-          {vans.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.placa} (KM: {v.kmAtual})
-            </option>
-          ))}
-        </select>
+
+        {/* Van - apenas para motoristas */}
+        {isMotorista && (
+          <>
+            <label style={{ marginTop: "15px" }}>Van:</label>
+            <select
+              value={newRecordVanId}
+              onChange={(e) => setNewRecordVanId(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Selecione uma van</option>
+              {vans.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.placa} (KM: {v.kmAtual})
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
         {/* Rota */}
         <label style={{ marginTop: "15px" }}>Rota:</label>
@@ -168,33 +197,37 @@ export default function RegistroModalCompleto({
           ))}
         </select>
 
-        {/* KM Inicial / Final */}
-        <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-          <div style={{ flex: 1 }}>
-            <label>KM Inicial:</label>
-            <input
-              type="number"
-              value={newRecordKmInicial}
-              onChange={(e) => setNewRecordKmInicial(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label>KM Final:</label>
-            <input
-              type="number"
-              value={newRecordKmFinal}
-              onChange={(e) => setNewRecordKmFinal(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-        </div>
+        {/* KM Inicial / Final - apenas para motoristas */}
+        {isMotorista && (
+          <>
+            <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
+              <div style={{ flex: 1 }}>
+                <label>KM Inicial:</label>
+                <input
+                  type="number"
+                  value={newRecordKmInicial}
+                  onChange={(e) => setNewRecordKmInicial(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label>KM Final:</label>
+                <input
+                  type="number"
+                  value={newRecordKmFinal}
+                  onChange={(e) => setNewRecordKmFinal(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
 
-        {/* Distância calculada */}
-        {newRecordKmFinal && newRecordKmInicial && (
-          <p style={{ marginTop: "5px", color: "#666" }}>
-            Distância percorrida: {parseInt(newRecordKmFinal) - parseInt(newRecordKmInicial)} km
-          </p>
+            {/* Distância calculada */}
+            {newRecordKmFinal && newRecordKmInicial && (
+              <p style={{ marginTop: "5px", color: "#666" }}>
+                Distância percorrida: {parseInt(newRecordKmFinal) - parseInt(newRecordKmInicial)} km
+              </p>
+            )}
+          </>
         )}
 
         {/* Datas e horas de abertura */}
@@ -241,20 +274,6 @@ export default function RegistroModalCompleto({
           </div>
         </div>
 
-        {/* Diário de bordo */}
-        <div style={{ marginTop: "15px" }}>
-          <label>Diário de Bordo (opcional):</label>
-          <textarea
-            value={newRecordDiarioBordo}
-            onChange={(e) => setNewRecordDiarioBordo(e.target.value)}
-            style={{
-              ...inputStyle,
-              minHeight: "60px",
-              resize: "vertical"
-            }}
-            placeholder="Observações sobre a viagem..."
-          />
-        </div>
 
 
         {/* Botões */}

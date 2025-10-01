@@ -15,14 +15,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       horaFechamento,
       diarioBordo 
     } = req.body;
+
     
     try {
       const db = admin.firestore();
       
       // Buscar dados do usuário
       const userDoc = await db.collection('usuarios').doc(userId).get();
+      
+      if (!userDoc.exists) {
+        console.log('Usuário não encontrado:', userId);
+        return res.status(400).json({ error: 'Usuário não encontrado' });
+      }
+      
       const userData = userDoc.data();
       const userTipo = userData?.tipo || 'motorista';
+      
       
       let vanData = null;
       
@@ -71,15 +79,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         origem: origemFinal,
         destino: destinoFinal,
         abertura: {
-          dataHora: dataHoraAbertura,
-          kmInicial: kmInicial
+          dataHora: dataHoraAbertura
         },
         fechamento: {
-          dataHora: dataHoraFechamento,
-          kmFinal: kmFinal,
-          diarioBordo: diarioBordo || null
+          dataHora: dataHoraFechamento
         }
       };
+
+      // Adicionar campos específicos para motorista
+      if (userTipo === 'motorista') {
+        registroData.abertura.kmInicial = kmInicial;
+        registroData.fechamento.kmFinal = kmFinal;
+        if (diarioBordo) {
+          registroData.fechamento.diarioBordo = diarioBordo;
+        }
+      }
 
       // Adicionar dados específicos do motorista
       if (userTipo === 'motorista' && vanData) {
