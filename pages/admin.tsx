@@ -581,10 +581,26 @@ export default function Admin() {
   const [openRecords, setOpenRecords] = useState<any[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleRegistroCriado = (registro: any) => {
+  const handleRegistroCriado = async (registro: any) => {
+    // Adicionar o registro imediatamente à lista para feedback visual
     setRecords((prevRecords) => [registro, ...prevRecords]);
-    loadRecords(); // Recarregar registros para garantir sincronização
+    
+    // Mostrar indicador de atualização
+    setIsRefreshing(true);
+    
+    try {
+      // Recarregar registros do servidor com força para garantir sincronização
+      await loadRecords(true);
+      
+      // Forçar atualização da lista de registros abertos
+      const open = records.filter((record) => !record.fechamento);
+      setOpenRecords(open);
+    } finally {
+      // Ocultar indicador de atualização
+      setIsRefreshing(false);
+    }
   };
 
   // Atualizar registros em aberto a cada 5 minutos
@@ -715,16 +731,19 @@ export default function Admin() {
   const [allRecords, setAllRecords] = useState<any[]>([]);
   const [totalRecords, setTotalRecords] = useState(0);
 
-  const loadRecords = async () => {
+  const loadRecords = async (forceRefresh = false) => {
     let recordsData;
+    
+    // Adicionar timestamp para forçar refresh do cache se necessário
+    const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
     
     // Se há filtro por usuário, carregar apenas registros desse usuário
     if (recordFilters.selectedUser) {
-      const response = await fetch(`/api/records?userId=${recordFilters.selectedUser}&getAll=true`);
+      const response = await fetch(`/api/records?userId=${recordFilters.selectedUser}&getAll=true${cacheBuster}`);
       recordsData = await response.json();
     } else {
       // Caso contrário, carregar todos os registros
-      const response = await fetch('/api/records?getAll=true');
+      const response = await fetch(`/api/records?getAll=true${cacheBuster}`);
       recordsData = await response.json();
     }
     
@@ -2309,11 +2328,18 @@ export default function Admin() {
     router.push("/login");
   };
 
-  const refreshAllData = () => {
-    loadUsers();
-    loadRecords();
-    loadVans()
-    setCurrentPage(1); // Reset para primeira página
+  const refreshAllData = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        loadUsers(),
+        loadRecords(true), // Forçar refresh
+        loadVans()
+      ]);
+      setCurrentPage(1); // Reset para primeira página
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -2995,8 +3021,8 @@ export default function Admin() {
           >
             📚 Ajuda
           </button>
-          <button onClick={refreshAllData} className="btn-primary">
-            Atualizar
+          <button onClick={refreshAllData} className="btn-primary" disabled={isRefreshing}>
+            {isRefreshing ? '🔄 Atualizando...' : 'Atualizar'}
           </button>
           <button onClick={logout} className="btn-secondary">
             Sair
