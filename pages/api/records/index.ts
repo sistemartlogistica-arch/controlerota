@@ -127,8 +127,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         
         // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
         if (!userId) {
-          const activeUserIds = await getActiveUserIds(db);
-          records = records.filter(record => activeUserIds.includes(record.userId));
+          try {
+            const activeUserIds = await getActiveUserIds(db);
+            records = records.filter(record => activeUserIds.includes(record.userId));
+          } catch (error) {
+            console.error('Erro ao filtrar usuários ativos:', error);
+            // Continuar sem filtro em caso de erro
+          }
         }
         
         // Atualizar cache
@@ -158,8 +163,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
       if (!userId) {
-        const activeUserIds = await getActiveUserIds(db);
-        records = records.filter(record => activeUserIds.includes(record.userId));
+        try {
+          const activeUserIds = await getActiveUserIds(db);
+          records = records.filter(record => activeUserIds.includes(record.userId));
+        } catch (error) {
+          console.error('Erro ao filtrar usuários ativos:', error);
+          // Continuar sem filtro em caso de erro
+        }
       }
       
       // Atualizar cache

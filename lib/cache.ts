@@ -45,24 +45,26 @@ export const getActiveUserIds = async (db: any): Promise<string[]> => {
     return activeUsersCache[cacheKey].data;
   }
   
-  // Buscar usuários ativos
-  const activeUsersSnapshot = await db.collection('usuarios')
-    .where('ativo', '==', true)
-    .get();
-  const activeUserIds = activeUsersSnapshot.docs.map((doc: any) => doc.id);
-  
-  // Buscar usuários sem campo 'ativo' (considerados ativos por padrão)
-  const allUsersSnapshot = await db.collection('usuarios').get();
-  const usersWithoutActiveField = allUsersSnapshot.docs
-    .filter((doc: any) => !doc.data().hasOwnProperty('ativo'))
-    .map((doc: any) => doc.id);
-  
-  const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
-  
-  // Atualizar cache
-  activeUsersCache[cacheKey] = { data: allActiveUserIds, time: now };
-  
-  return allActiveUserIds;
+  try {
+    // Buscar todos os usuários de uma vez (mais eficiente)
+    const allUsersSnapshot = await db.collection('usuarios').get();
+    const allActiveUserIds = allUsersSnapshot.docs
+      .filter((doc: any) => {
+        const data = doc.data();
+        // Considerar ativo se não tem campo 'ativo' ou se 'ativo' é true
+        return !data.hasOwnProperty('ativo') || data.ativo === true;
+      })
+      .map((doc: any) => doc.id);
+    
+    // Atualizar cache
+    activeUsersCache[cacheKey] = { data: allActiveUserIds, time: now };
+    
+    return allActiveUserIds;
+  } catch (error) {
+    console.error('Erro ao buscar usuários ativos:', error);
+    // Retornar array vazio em caso de erro para não quebrar a aplicação
+    return [];
+  }
 };
 
 // Função para limpar cache de usuários ativos
