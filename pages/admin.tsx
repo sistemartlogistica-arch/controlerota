@@ -8,6 +8,16 @@ import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import RegistroModalCompleto from "@/components/newRegisterModal";
 import RegistrosCount from "@/components/RegistrosCount";
 
+// Função utilitária para formatar data para input
+const formatDateForInput = (dateString: string) => {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  // Ajustar para fuso horário brasileiro (UTC-3)
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  const localDate = new Date(date.getTime() - offsetMs);
+  return localDate.toISOString().slice(0, 16);
+};
+
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
   const [newRotaOrigem, setNewRotaOrigem] = useState("");
@@ -924,25 +934,27 @@ export default function Admin() {
 
     setLoading(true);
     try {
+      const requestData = {
+        id: editingRecord.id,
+        kmInicial: editRecordData.kmInicial
+          ? parseInt(editRecordData.kmInicial)
+          : null,
+        kmFinal: editRecordData.kmFinal
+          ? parseInt(editRecordData.kmFinal)
+          : null,
+        dataAbertura: editRecordData.dataAbertura
+          ? new Date(editRecordData.dataAbertura).toISOString()
+          : null,
+        dataFechamento: editRecordData.dataFechamento
+          ? new Date(editRecordData.dataFechamento).toISOString()
+          : null,
+        diarioBordo: editRecordData.diarioBordo,
+      };
+
       const response = await fetch("/api/records/edit", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingRecord.id,
-          kmInicial: editRecordData.kmInicial
-            ? parseInt(editRecordData.kmInicial)
-            : null,
-          kmFinal: editRecordData.kmFinal
-            ? parseInt(editRecordData.kmFinal)
-            : null,
-          dataAbertura: editRecordData.dataAbertura
-            ? new Date(editRecordData.dataAbertura).toISOString()
-            : null,
-          dataFechamento: editRecordData.dataFechamento
-            ? new Date(editRecordData.dataFechamento).toISOString()
-            : null,
-          diarioBordo: editRecordData.diarioBordo,
-        }),
+        body: JSON.stringify(requestData),
       });
 
       if (response.ok) {
@@ -957,7 +969,8 @@ export default function Admin() {
         });
         loadRecords();
       } else {
-        alert("Erro ao atualizar registro");
+        const errorData = await response.json();
+        alert(`Erro ao atualizar registro: ${errorData.error || 'Erro desconhecido'}`);
       }
     } catch (error) {
       alert("Erro ao atualizar registro");
@@ -3744,20 +3757,6 @@ export default function Admin() {
                               <button
                                 onClick={() => {
                                   setEditingRecord(record);
-                                  const formatDateForInput = (
-                                    dateString: string
-                                  ) => {
-                                    if (!dateString) return "";
-                                    const date = new Date(dateString);
-                                    // Ajustar para fuso horário brasileiro (UTC-3)
-                                    const offsetMs =
-                                      date.getTimezoneOffset() * 60 * 1000;
-                                    const localDate = new Date(
-                                      date.getTime() - offsetMs
-                                    );
-                                    return localDate.toISOString().slice(0, 16);
-                                  };
-
                                   setEditRecordData({
                                     kmInicial:
                                       record.abertura?.kmInicial?.toString() ||
