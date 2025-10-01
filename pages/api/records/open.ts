@@ -1,9 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
-
-// Cache para registros abertos
-const openRecordsCache: { [key: string]: { data: any; time: number } } = {};
-const CACHE_DURATION = 2 * 60 * 1000; // 2 minutos para registros abertos (mais frequente)
+import { openRecordsCache, OPEN_CACHE_DURATION, getActiveUserIds } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -17,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   
   // Verificar cache
   const now = Date.now();
-  if (openRecordsCache[cacheKey] && (now - openRecordsCache[cacheKey].time) < CACHE_DURATION) {
+  if (openRecordsCache[cacheKey] && (now - openRecordsCache[cacheKey].time) < OPEN_CACHE_DURATION) {
     return res.status(200).json(openRecordsCache[cacheKey].data);
   }
   
@@ -36,19 +33,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
     if (!userId) {
-      const activeUsersSnapshot = await db.collection('usuarios')
-        .where('ativo', '==', true)
-        .get();
-      const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
-      
-      // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
-      const allUsersSnapshot = await db.collection('usuarios').get();
-      const usersWithoutActiveField = allUsersSnapshot.docs
-        .filter(doc => !doc.data().hasOwnProperty('ativo'))
-        .map(doc => doc.id);
-      
-      const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
-      records = records.filter(record => allActiveUserIds.includes(record.userId));
+      const activeUserIds = await getActiveUserIds(db);
+      records = records.filter(record => activeUserIds.includes(record.userId));
     }
     
     // Atualizar cache

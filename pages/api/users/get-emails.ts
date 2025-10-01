@@ -19,11 +19,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { userIds } = req.body;
 
   try {
-    console.log('Environment check:', {
-      hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-      hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
-      projectId: process.env.FIREBASE_PROJECT_ID,
-    });
 
     const userRecords = await admin.auth().getUsers(
       userIds.map((uid: string) => ({ uid }))

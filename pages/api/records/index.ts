@@ -1,9 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
-
-// Cache para registros - mais agressivo para economizar cota
-const recordsCache: { [key: string]: { data: any; time: number } } = {};
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos para registros
+import { recordsCache, CACHE_DURATION, clearRecordsCache, getActiveUserIds, clearActiveUsersCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
@@ -76,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       // Limpar cache de registros
-      Object.keys(recordsCache).forEach(key => delete recordsCache[key]);
+      clearRecordsCache();
       
       res.status(201).json({ id: docRef.id });
     } catch (error: any) {
@@ -109,29 +106,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         query = query.where('fechamento', '==', null) as any;
       }
       
-      // Adicionar ordenação
-      query = query.orderBy('abertura.dataHora', 'desc') as any;
+      // Adicionar ordenação apenas se não há filtro por userId (para evitar índice composto)
+      if (!userId) {
+        query = query.orderBy('abertura.dataHora', 'asc') as any;
+      }
       
       // Se getAll=true, retornar todos os registros (sem paginação)
       if (getAll === 'true') {
         const snapshot = await query.get();
         let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
         
+        // Ordenar por data se não foi ordenado no Firestore
+        if (userId) {
+          records = records.sort((a, b) => {
+            const dateA = new Date(a.abertura?.dataHora || 0);
+            const dateB = new Date(b.abertura?.dataHora || 0);
+            return dateA.getTime() - dateB.getTime(); // Crescente
+          });
+        }
+        
         // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
         if (!userId) {
-          const activeUsersSnapshot = await db.collection('usuarios')
-            .where('ativo', '==', true)
-            .get();
-          const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
-          
-          // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
-          const allUsersSnapshot = await db.collection('usuarios').get();
-          const usersWithoutActiveField = allUsersSnapshot.docs
-            .filter(doc => !doc.data().hasOwnProperty('ativo'))
-            .map(doc => doc.id);
-          
-          const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
-          records = records.filter(record => allActiveUserIds.includes(record.userId));
+          const activeUserIds = await getActiveUserIds(db);
+          records = records.filter(record => activeUserIds.includes(record.userId));
         }
         
         // Atualizar cache
@@ -150,21 +147,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const snapshot = await query.get();
       let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       
+      // Ordenar por data se não foi ordenado no Firestore
+      if (userId) {
+        records = records.sort((a, b) => {
+          const dateA = new Date(a.abertura?.dataHora || 0);
+          const dateB = new Date(b.abertura?.dataHora || 0);
+          return dateA.getTime() - dateB.getTime(); // Crescente
+        });
+      }
+      
       // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
       if (!userId) {
-        const activeUsersSnapshot = await db.collection('usuarios')
-          .where('ativo', '==', true)
-          .get();
-        const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
-        
-        // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
-        const allUsersSnapshot = await db.collection('usuarios').get();
-        const usersWithoutActiveField = allUsersSnapshot.docs
-          .filter(doc => !doc.data().hasOwnProperty('ativo'))
-          .map(doc => doc.id);
-        
-        const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
-        records = records.filter(record => allActiveUserIds.includes(record.userId));
+        const activeUserIds = await getActiveUserIds(db);
+        records = records.filter(record => activeUserIds.includes(record.userId));
       }
       
       // Atualizar cache

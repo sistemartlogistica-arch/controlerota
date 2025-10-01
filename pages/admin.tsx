@@ -7,6 +7,33 @@ import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import RegistroModalCompleto from "@/components/newRegisterModal";
 import RegistrosCount from "@/components/RegistrosCount";
+import toast from "react-hot-toast";
+
+// Função utilitária para formatar data para input
+const formatDateForInput = (dateString: string) => {
+  if (!dateString) return "";
+  
+  // Se a data já tem offset de fuso horário, usar diretamente
+  if (dateString.includes('Z') || dateString.includes('+') || dateString.includes('-', 10)) {
+    const date = new Date(dateString);
+    // Converter para o formato local sem alterar o horário
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+  
+  // Se não tem offset, assumir que é UTC e converter para local
+  const date = new Date(dateString + 'Z');
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
 
 function RotaManagement() {
   const [rotas, setRotas] = useState<any[]>([]);
@@ -555,20 +582,70 @@ export default function Admin() {
   const [openRecords, setOpenRecords] = useState<any[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [newRecordAdded, setNewRecordAdded] = useState(false);
 
-  const handleRegistroCriado = (registro: any) => {
-    console.log("Registro criado:", registro);
-    setRecords((prevRecords) => [registro, ...prevRecords]);
-    loadRecords(); // Recarregar registros para garantir sincronização
+  // Função para atualizar apenas os registros abertos
+  const updateOpenRecords = () => {
+    const open = records.filter((record) => !record.fechamento);
+    setOpenRecords(open);
+  };
+
+  // Função para atualizar apenas o contador de registros
+  const updateRecordsCount = () => {
+    setTotalRecords(records.length);
+  };
+
+  // Função para atualizar apenas os dados de relatório
+  const updateReportData = () => {
+    setLastUpdate(new Date());
+  };
+
+  const handleRegistroCriado = async (registro: any) => {
+    // Mostrar toast de sucesso
+    toast.success('Registro inserido com sucesso!', {
+      duration: 3000,
+    });
+    
+    // Adicionar o registro imediatamente à lista para feedback visual
+    setRecords((prevRecords) => {
+      const newRecords = [registro, ...prevRecords];
+      
+      // Atualizar registros abertos se o novo registro não tem fechamento
+      if (!registro.fechamento) {
+        setOpenRecords((prevOpen) => [registro, ...prevOpen]);
+      }
+      
+      return newRecords;
+    });
+    
+    // Atualizar contadores locais
+    setTotalRecords(prev => prev + 1);
+    setAllRecords(prev => [registro, ...prev]);
+    
+    // Atualizar timestamp para forçar re-render dos componentes
+    updateReportData();
+    
+    // Mostrar indicador de novo registro
+    setNewRecordAdded(true);
+    setTimeout(() => setNewRecordAdded(false), 3000); // Ocultar após 3 segundos
+    
+    // Atualizar apenas os dados necessários do servidor em background
+    setTimeout(async () => {
+      try {
+        await loadRecords(true);
+        updateOpenRecords();
+        updateRecordsCount();
+      } catch (error) {
+        console.error('Erro ao sincronizar dados:', error);
+        toast.error('Erro ao sincronizar dados com o servidor');
+      }
+    }, 1000); // Aguardar 1 segundo para não sobrecarregar
   };
 
   // Atualizar registros em aberto a cada 5 minutos
   useEffect(() => {
-    const updateOpenRecords = () => {
-      const open = records.filter((record) => !record.fechamento);
-      setOpenRecords(open);
-    };
-
     updateOpenRecords();
     const interval = setInterval(() => {
       loadRecords(); // Recarregar todos os registros
@@ -594,15 +671,9 @@ export default function Admin() {
     endDate: "",
     selectedUser: "",
   });
-  const [jornadasCurrentPage, setJornadasCurrentPage] = useState(1);
-  const [jornadasItemsPerPage] = useState(20);
   const [jornadasDataLoaded, setJornadasDataLoaded] = useState(false);
   const [jornadasLoading, setJornadasLoading] = useState(false);
 
-  // Resetar página quando filtros mudarem
-  React.useEffect(() => {
-    setJornadasCurrentPage(1);
-  }, [jornadasFilters]);
   const [showJornadaModal, setShowJornadaModal] = useState(false);
   const [jornadaNormal, setJornadaNormal] = useState("08:00");
   const [exportType, setExportType] = useState("");
@@ -687,18 +758,27 @@ export default function Admin() {
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
   const [showAllRecords, setShowAllRecords] = useState(false);
+  const [allRecords, setAllRecords] = useState<any[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
 
-  const loadRecords = async () => {
+  const loadRecords = async (forceRefresh = false) => {
     let recordsData;
     
-    if (showAllRecords) {
-      // Usar API para buscar todos os registros
-      const response = await fetch('/api/records?getAll=true');
+    // Adicionar timestamp para forçar refresh do cache se necessário
+    const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
+    
+    // Se há filtro por usuário, carregar apenas registros desse usuário
+    if (recordFilters.selectedUser) {
+      const response = await fetch(`/api/records?userId=${recordFilters.selectedUser}&getAll=true${cacheBuster}`);
       recordsData = await response.json();
     } else {
-      // Usar função local com paginação
-      recordsData = await getAllRecords(currentPage, recordsPerPage);
+      // Caso contrário, carregar todos os registros
+      const response = await fetch(`/api/records?getAll=true${cacheBuster}`);
+      recordsData = await response.json();
     }
+    
+    setAllRecords(recordsData);
+    setTotalRecords(recordsData.length);
     
     // Ordenar por nome do usuário
     const sortedRecords = recordsData.sort((a: any, b: any) => {
@@ -717,6 +797,11 @@ export default function Admin() {
       loadRecords();
     }
   }, [currentPage, users, showAllRecords]);
+
+  // Resetar página quando filtros mudarem
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [recordFilters]);
 
   const loadVans = async () => {
     try {
@@ -914,25 +999,27 @@ export default function Admin() {
 
     setLoading(true);
     try {
+      const requestData = {
+        id: editingRecord.id,
+        kmInicial: editRecordData.kmInicial
+          ? parseInt(editRecordData.kmInicial)
+          : null,
+        kmFinal: editRecordData.kmFinal
+          ? parseInt(editRecordData.kmFinal)
+          : null,
+        dataAbertura: editRecordData.dataAbertura
+          ? new Date(editRecordData.dataAbertura).toISOString()
+          : null,
+        dataFechamento: editRecordData.dataFechamento
+          ? new Date(editRecordData.dataFechamento).toISOString()
+          : null,
+        diarioBordo: editRecordData.diarioBordo,
+      };
+
       const response = await fetch("/api/records/edit", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingRecord.id,
-          kmInicial: editRecordData.kmInicial
-            ? parseInt(editRecordData.kmInicial)
-            : null,
-          kmFinal: editRecordData.kmFinal
-            ? parseInt(editRecordData.kmFinal)
-            : null,
-          dataAbertura: editRecordData.dataAbertura
-            ? new Date(editRecordData.dataAbertura).toISOString()
-            : null,
-          dataFechamento: editRecordData.dataFechamento
-            ? new Date(editRecordData.dataFechamento).toISOString()
-            : null,
-          diarioBordo: editRecordData.diarioBordo,
-        }),
+        body: JSON.stringify(requestData),
       });
 
       if (response.ok) {
@@ -947,7 +1034,8 @@ export default function Admin() {
         });
         loadRecords();
       } else {
-        alert("Erro ao atualizar registro");
+        const errorData = await response.json();
+        alert(`Erro ao atualizar registro: ${errorData.error || 'Erro desconhecido'}`);
       }
     } catch (error) {
       alert("Erro ao atualizar registro");
@@ -1092,14 +1180,12 @@ export default function Admin() {
   };
 
   const getFilteredData = () => {
-    const filteredRecords = records.filter((record: any) => {
-      if (
-        recordFilters.selectedUser &&
-        record.userId !== recordFilters.selectedUser
-      ) {
-        return false;
-      }
-
+    // Usar allRecords (já filtrados por usuário se aplicável)
+    const recordsToFilter = allRecords.length > 0 ? allRecords : records;
+    
+    
+    const filteredRecords = recordsToFilter.filter((record: any) => {
+      // Filtro por data (principal filtro após usuário)
       if (recordFilters.startDate || recordFilters.endDate) {
         const recordDate = new Date(record.abertura?.dataHora);
 
@@ -1119,10 +1205,12 @@ export default function Admin() {
         }
       }
 
+      // Filtro por registros abertos
       if (recordFilters.showOnlyOpen && record.fechamento) {
         return false;
       }
 
+      // Filtro por rota
       if (recordFilters.rotaSearch) {
         const rota = `${record.origem || ""} ${
           record.destino || ""
@@ -1134,6 +1222,14 @@ export default function Admin() {
 
       return true;
     });
+
+    // Aplicar paginação se não estiver no modo "mostrar todos"
+    let paginatedRecords = filteredRecords;
+    if (!showAllRecords) {
+      const startIndex = (currentPage - 1) * recordsPerPage;
+      const endIndex = startIndex + recordsPerPage;
+      paginatedRecords = filteredRecords.slice(startIndex, endIndex);
+    }
 
     const data = [];
     data.push([
@@ -1149,7 +1245,7 @@ export default function Admin() {
       "Diário",
     ]);
 
-    filteredRecords.forEach((record) => {
+    paginatedRecords.forEach((record) => {
       const user = users.find((u) => u.uid === record.userId);
       const distancia =
         record.fechamento?.kmFinal && record.abertura?.kmInicial
@@ -1574,17 +1670,14 @@ export default function Admin() {
     const headers = allData[0] || [];
     const dataRows = allData.slice(1);
     
-    const startIndex = (jornadasCurrentPage - 1) * jornadasItemsPerPage;
-    const endIndex = startIndex + jornadasItemsPerPage;
-    const paginatedRows = dataRows.slice(startIndex, endIndex);
-    
+    // Retornar todos os dados sem paginação
     return {
       headers,
-      data: [headers, ...paginatedRows],
-      totalPages: Math.ceil(dataRows.length / jornadasItemsPerPage),
+      data: allData,
+      totalPages: 1,
       totalItems: dataRows.length,
-      currentPage: jornadasCurrentPage,
-      itemsPerPage: jornadasItemsPerPage
+      currentPage: 1,
+      itemsPerPage: dataRows.length
     };
   };
 
@@ -2037,105 +2130,21 @@ export default function Admin() {
             </table>
           </div>
           
-          {/* Controles de Paginação */}
+          {/* Informação de total de registros */}
           {(() => {
             const paginatedData = getJornadaDataWithHoursPaginated();
-            const { totalPages, totalItems, currentPage, itemsPerPage } = paginatedData;
-            
-            if (totalPages <= 1) return null;
-            
-            const startItem = (currentPage - 1) * itemsPerPage + 1;
-            const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+            const { totalItems } = paginatedData;
             
             return (
-              <div className="pagination-controls" style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
+              <div style={{
                 padding: '15px 20px',
                 backgroundColor: '#f8f9fa',
                 borderTop: '1px solid #dee2e6',
-                marginTop: '10px'
+                marginTop: '10px',
+                textAlign: 'center'
               }}>
-                <div className="pagination-info" style={{ fontSize: '14px', color: '#6c757d' }}>
-                  Mostrando {startItem} a {endItem} de {totalItems} registros
-                </div>
-                
-                <div className="pagination-buttons" style={{ display: 'flex', gap: '5px' }}>
-                  <button
-                    onClick={() => setJornadasCurrentPage(1)}
-                    disabled={currentPage === 1}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === 1 ? '#f8f9fa' : '#fff',
-                      color: currentPage === 1 ? '#6c757d' : '#007bff',
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Primeira
-                  </button>
-                  
-                  <button
-                    onClick={() => setJornadasCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === 1 ? '#f8f9fa' : '#fff',
-                      color: currentPage === 1 ? '#6c757d' : '#007bff',
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Anterior
-                  </button>
-                  
-                  <span style={{
-                    padding: '8px 12px',
-                    backgroundColor: '#007bff',
-                    color: '#fff',
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}>
-                    {currentPage} de {totalPages}
-                  </span>
-                  
-                  <button
-                    onClick={() => setJornadasCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === totalPages ? '#f8f9fa' : '#fff',
-                      color: currentPage === totalPages ? '#6c757d' : '#007bff',
-                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Próxima
-                  </button>
-                  
-                  <button
-                    onClick={() => setJornadasCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === totalPages ? '#f8f9fa' : '#fff',
-                      color: currentPage === totalPages ? '#6c757d' : '#007bff',
-                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Última
-                  </button>
+                <div style={{ fontSize: '14px', color: '#6c757d' }}>
+                  Total de {totalItems} registros
                 </div>
               </div>
             );
@@ -2146,7 +2155,6 @@ export default function Admin() {
             <button
               onClick={() => {
                 setJornadasDataLoaded(false);
-                setJornadasCurrentPage(1);
               }}
               style={{
                 padding: '10px 20px',
@@ -2262,11 +2270,18 @@ export default function Admin() {
     router.push("/login");
   };
 
-  const refreshAllData = () => {
-    loadUsers();
-    loadRecords();
-    loadVans()
-    setCurrentPage(1); // Reset para primeira página
+  const refreshAllData = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        loadUsers(),
+        loadRecords(true), // Forçar refresh
+        loadVans()
+      ]);
+      setCurrentPage(1); // Reset para primeira página
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -2948,8 +2963,8 @@ export default function Admin() {
           >
             📚 Ajuda
           </button>
-          <button onClick={refreshAllData} className="btn-primary">
-            Atualizar
+          <button onClick={refreshAllData} className="btn-primary" disabled={isRefreshing}>
+            {isRefreshing ? '🔄 Atualizando...' : 'Atualizar'}
           </button>
           <button onClick={logout} className="btn-secondary">
             Sair
@@ -3437,7 +3452,19 @@ export default function Admin() {
           className="section-header"
           onClick={() => toggleSection("records")}
         >
-          <h2>Registros (<RegistrosCount/>)</h2>
+          <h2>
+            Registros (<RegistrosCount/>)
+            {newRecordAdded && (
+              <span style={{ 
+                marginLeft: '10px', 
+                fontSize: '14px', 
+                color: '#28a745',
+                fontWeight: 'normal'
+              }}>
+                ✓ Novo registro adicionado
+              </span>
+            )}
+          </h2>
           <div className="section-actions" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -3654,6 +3681,12 @@ export default function Admin() {
 
                       return true;
                     })
+                    .sort((a: any, b: any) => {
+                      // Ordenar por data de abertura (mais recentes primeiro)
+                      const dateA = new Date(a.abertura?.dataHora || '1900-01-01');
+                      const dateB = new Date(b.abertura?.dataHora || '1900-01-01');
+                      return dateB.getTime() - dateA.getTime();
+                    })
                     .map((record: any) => {
                       const user = users.find((u) => u.uid === record.userId);
                       const distancia =
@@ -3726,20 +3759,6 @@ export default function Admin() {
                               <button
                                 onClick={() => {
                                   setEditingRecord(record);
-                                  const formatDateForInput = (
-                                    dateString: string
-                                  ) => {
-                                    if (!dateString) return "";
-                                    const date = new Date(dateString);
-                                    // Ajustar para fuso horário brasileiro (UTC-3)
-                                    const offsetMs =
-                                      date.getTimezoneOffset() * 60 * 1000;
-                                    const localDate = new Date(
-                                      date.getTime() - offsetMs
-                                    );
-                                    return localDate.toISOString().slice(0, 16);
-                                  };
-
                                   setEditRecordData({
                                     kmInicial:
                                       record.abertura?.kmInicial?.toString() ||
@@ -3797,13 +3816,13 @@ export default function Admin() {
                     Anterior
                   </button>
                   <span>
-                    Página {currentPage}
+                    Página {currentPage} - {getFilteredData().data.length - 1} de {getFilteredData().filteredRecords.length} registros
                   </span>
                   <button
                     onClick={() =>
                       setCurrentPage(currentPage + 1)
                     }
-                    disabled={records.length < recordsPerPage}
+                    disabled={currentPage * recordsPerPage >= getFilteredData().filteredRecords.length}
                     className="btn-secondary"
                   >
                     Próxima
@@ -3824,7 +3843,7 @@ export default function Admin() {
                     color: "#2c5aa0",
                   }}
                 >
-                  <strong>Modo Completo Ativo:</strong> Exibindo todos os {records.length} registros. 
+                  <strong>Modo Completo Ativo:</strong> Exibindo {getFilteredData().filteredRecords.length} de {totalRecords} registros. 
                   <br />
                   <small>⚠️ Nota: Este modo consome mais recursos do Firestore.</small>
                 </div>
@@ -4182,7 +4201,7 @@ export default function Admin() {
                 color: "#666",
               }}
             >
-              Última atualização: {new Date().toLocaleTimeString("pt-BR")}{" "}
+              Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}{" "}
               (Atualiza automaticamente a cada 5 minutos)
             </div>
           </div>

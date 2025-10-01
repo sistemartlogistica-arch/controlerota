@@ -34,8 +34,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Atualizar cache
     userCache[uid] = { data: userData, time: now };
-    
-    console.log('Usuário buscado com sucesso:', userData);
 
     res.status(200).json(userData);
   } catch (error: any) {

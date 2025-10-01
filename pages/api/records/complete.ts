@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearRecordsCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
@@ -15,14 +16,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       horaFechamento,
       diarioBordo 
     } = req.body;
+
     
     try {
       const db = admin.firestore();
       
       // Buscar dados do usuário
       const userDoc = await db.collection('usuarios').doc(userId).get();
+      
+      if (!userDoc.exists) {
+        console.log('Usuário não encontrado:', userId);
+        return res.status(400).json({ error: 'Usuário não encontrado' });
+      }
+      
       const userData = userDoc.data();
       const userTipo = userData?.tipo || 'motorista';
+      
       
       let vanData = null;
       
@@ -56,9 +65,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         rotaIdFinal = rotaId;
       }
       
-      // Criar data/hora de abertura
-      const dataHoraAbertura = new Date(`${dataAbertura}T${horaAbertura}:00`).toISOString();
-      const dataHoraFechamento = new Date(`${dataFechamento}T${horaFechamento}:00`).toISOString();
+      // Criar data/hora de abertura considerando fuso horário brasileiro (UTC-3)
+      const dataHoraAbertura = new Date(`${dataAbertura}T${horaAbertura}:00-03:00`).toISOString();
+      const dataHoraFechamento = new Date(`${dataFechamento}T${horaFechamento}:00-03:00`).toISOString();
       
       // Validar se data de fechamento é posterior à abertura
       if (new Date(dataHoraFechamento) <= new Date(dataHoraAbertura)) {
@@ -71,15 +80,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         origem: origemFinal,
         destino: destinoFinal,
         abertura: {
-          dataHora: dataHoraAbertura,
-          kmInicial: kmInicial
+          dataHora: dataHoraAbertura
         },
         fechamento: {
-          dataHora: dataHoraFechamento,
-          kmFinal: kmFinal,
-          diarioBordo: diarioBordo || null
+          dataHora: dataHoraFechamento
         }
       };
+
+      // Adicionar campos específicos para motorista
+      if (userTipo === 'motorista') {
+        registroData.abertura.kmInicial = kmInicial;
+        registroData.fechamento.kmFinal = kmFinal;
+        if (diarioBordo) {
+          registroData.fechamento.diarioBordo = diarioBordo;
+        }
+      }
 
       // Adicionar dados específicos do motorista
       if (userTipo === 'motorista' && vanData) {
@@ -97,8 +112,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
       
-      // Nota: Cache de registros será limpo automaticamente no próximo restart do servidor
-      // ou pode ser implementado um sistema de invalidação mais sofisticado
+      // Limpar cache de registros após criação
+      clearRecordsCache();
       
       res.status(201).json({ id: docRef.id });
     } catch (error: any) {
