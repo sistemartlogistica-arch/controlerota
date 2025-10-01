@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearVansCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {
@@ -20,6 +21,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ativa: false,
       desativadaEm: new Date().toISOString()
     });
+
+    // Limpar cache de vans após desativação
+    clearVansCache();
 
     res.status(200).json({ message: 'Van desativada com sucesso' });
   } catch (error: any) {

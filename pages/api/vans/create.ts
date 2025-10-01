@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearVansCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -34,6 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     const docRef = await db.collection('vans').add(vanData);
+    
+    // Limpar cache de vans após criação
+    clearVansCache();
     
     res.status(201).json({ id: docRef.id, ...vanData });
   } catch (error: any) {
