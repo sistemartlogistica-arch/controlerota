@@ -13,6 +13,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const db = admin.firestore();
       
+      // Buscar o registro para pegar o vanId e userTipo
+      const registroDoc = await db.collection('registros').doc(id).get();
+      if (!registroDoc.exists) {
+        return res.status(404).json({ error: 'Registro não encontrado' });
+      }
+      
+      const registroData = registroDoc.data();
+      if (!registroData) {
+        return res.status(404).json({ error: 'Dados do registro não encontrados' });
+      }
+      
       const updateData: any = {};
 
       if (kmInicial !== null && kmInicial !== undefined) {
@@ -36,6 +47,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       await db.collection('registros').doc(id).update(updateData);
+
+      // Atualizar KM da van se KM final foi alterado (apenas para motorista)
+      if (kmFinal !== null && kmFinal !== undefined && 
+          registroData.userTipo === 'motorista' && 
+          registroData.vanId) {
+        await db.collection('vans').doc(registroData.vanId).update({
+          kmAtual: kmFinal
+        });
+      }
 
       // Limpar cache de registros após edição
       clearRecordsCache();
