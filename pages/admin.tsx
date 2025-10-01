@@ -582,34 +582,63 @@ export default function Admin() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [newRecordAdded, setNewRecordAdded] = useState(false);
+
+  // Função para atualizar apenas os registros abertos
+  const updateOpenRecords = () => {
+    const open = records.filter((record) => !record.fechamento);
+    setOpenRecords(open);
+  };
+
+  // Função para atualizar apenas o contador de registros
+  const updateRecordsCount = () => {
+    setTotalRecords(records.length);
+  };
+
+  // Função para atualizar apenas os dados de relatório
+  const updateReportData = () => {
+    setLastUpdate(new Date());
+  };
 
   const handleRegistroCriado = async (registro: any) => {
     // Adicionar o registro imediatamente à lista para feedback visual
-    setRecords((prevRecords) => [registro, ...prevRecords]);
-    
-    // Mostrar indicador de atualização
-    setIsRefreshing(true);
-    
-    try {
-      // Recarregar registros do servidor com força para garantir sincronização
-      await loadRecords(true);
+    setRecords((prevRecords) => {
+      const newRecords = [registro, ...prevRecords];
       
-      // Forçar atualização da lista de registros abertos
-      const open = records.filter((record) => !record.fechamento);
-      setOpenRecords(open);
-    } finally {
-      // Ocultar indicador de atualização
-      setIsRefreshing(false);
-    }
+      // Atualizar registros abertos se o novo registro não tem fechamento
+      if (!registro.fechamento) {
+        setOpenRecords((prevOpen) => [registro, ...prevOpen]);
+      }
+      
+      return newRecords;
+    });
+    
+    // Atualizar contadores locais
+    setTotalRecords(prev => prev + 1);
+    setAllRecords(prev => [registro, ...prev]);
+    
+    // Atualizar timestamp para forçar re-render dos componentes
+    updateReportData();
+    
+    // Mostrar indicador de novo registro
+    setNewRecordAdded(true);
+    setTimeout(() => setNewRecordAdded(false), 3000); // Ocultar após 3 segundos
+    
+    // Atualizar apenas os dados necessários do servidor em background
+    setTimeout(async () => {
+      try {
+        await loadRecords(true);
+        updateOpenRecords();
+        updateRecordsCount();
+      } catch (error) {
+        console.error('Erro ao sincronizar dados:', error);
+      }
+    }, 1000); // Aguardar 1 segundo para não sobrecarregar
   };
 
   // Atualizar registros em aberto a cada 5 minutos
   useEffect(() => {
-    const updateOpenRecords = () => {
-      const open = records.filter((record) => !record.fechamento);
-      setOpenRecords(open);
-    };
-
     updateOpenRecords();
     const interval = setInterval(() => {
       loadRecords(); // Recarregar todos os registros
@@ -3510,7 +3539,19 @@ export default function Admin() {
           className="section-header"
           onClick={() => toggleSection("records")}
         >
-          <h2>Registros (<RegistrosCount/>)</h2>
+          <h2>
+            Registros (<RegistrosCount/>)
+            {newRecordAdded && (
+              <span style={{ 
+                marginLeft: '10px', 
+                fontSize: '14px', 
+                color: '#28a745',
+                fontWeight: 'normal'
+              }}>
+                ✓ Novo registro adicionado
+              </span>
+            )}
+          </h2>
           <div className="section-actions" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsModalOpen(true)}
@@ -4247,7 +4288,7 @@ export default function Admin() {
                 color: "#666",
               }}
             >
-              Última atualização: {new Date().toLocaleTimeString("pt-BR")}{" "}
+              Última atualização: {lastUpdate.toLocaleTimeString("pt-BR")}{" "}
               (Atualiza automaticamente a cada 5 minutos)
             </div>
           </div>
