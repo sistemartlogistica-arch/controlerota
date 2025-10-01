@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Registro não encontrado' });
     }
 
-    const record = { id: doc.id, ...doc.data() };
+    const record: any = { id: doc.id, ...doc.data() };
     
     const analysis = {
       recordId: record.id,
