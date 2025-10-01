@@ -671,15 +671,9 @@ export default function Admin() {
     endDate: "",
     selectedUser: "",
   });
-  const [jornadasCurrentPage, setJornadasCurrentPage] = useState(1);
-  const [jornadasItemsPerPage] = useState(20);
   const [jornadasDataLoaded, setJornadasDataLoaded] = useState(false);
   const [jornadasLoading, setJornadasLoading] = useState(false);
 
-  // Resetar página quando filtros mudarem
-  React.useEffect(() => {
-    setJornadasCurrentPage(1);
-  }, [jornadasFilters]);
   const [showJornadaModal, setShowJornadaModal] = useState(false);
   const [jornadaNormal, setJornadaNormal] = useState("08:00");
   const [exportType, setExportType] = useState("");
@@ -1676,17 +1670,14 @@ export default function Admin() {
     const headers = allData[0] || [];
     const dataRows = allData.slice(1);
     
-    const startIndex = (jornadasCurrentPage - 1) * jornadasItemsPerPage;
-    const endIndex = startIndex + jornadasItemsPerPage;
-    const paginatedRows = dataRows.slice(startIndex, endIndex);
-    
+    // Retornar todos os dados sem paginação
     return {
       headers,
-      data: [headers, ...paginatedRows],
-      totalPages: Math.ceil(dataRows.length / jornadasItemsPerPage),
+      data: allData,
+      totalPages: 1,
       totalItems: dataRows.length,
-      currentPage: jornadasCurrentPage,
-      itemsPerPage: jornadasItemsPerPage
+      currentPage: 1,
+      itemsPerPage: dataRows.length
     };
   };
 
@@ -2139,105 +2130,21 @@ export default function Admin() {
             </table>
           </div>
           
-          {/* Controles de Paginação */}
+          {/* Informação de total de registros */}
           {(() => {
             const paginatedData = getJornadaDataWithHoursPaginated();
-            const { totalPages, totalItems, currentPage, itemsPerPage } = paginatedData;
-            
-            if (totalPages <= 1) return null;
-            
-            const startItem = (currentPage - 1) * itemsPerPage + 1;
-            const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+            const { totalItems } = paginatedData;
             
             return (
-              <div className="pagination-controls" style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
+              <div style={{
                 padding: '15px 20px',
                 backgroundColor: '#f8f9fa',
                 borderTop: '1px solid #dee2e6',
-                marginTop: '10px'
+                marginTop: '10px',
+                textAlign: 'center'
               }}>
-                <div className="pagination-info" style={{ fontSize: '14px', color: '#6c757d' }}>
-                  Mostrando {startItem} a {endItem} de {totalItems} registros
-                </div>
-                
-                <div className="pagination-buttons" style={{ display: 'flex', gap: '5px' }}>
-                  <button
-                    onClick={() => setJornadasCurrentPage(1)}
-                    disabled={currentPage === 1}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === 1 ? '#f8f9fa' : '#fff',
-                      color: currentPage === 1 ? '#6c757d' : '#007bff',
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Primeira
-                  </button>
-                  
-                  <button
-                    onClick={() => setJornadasCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === 1 ? '#f8f9fa' : '#fff',
-                      color: currentPage === 1 ? '#6c757d' : '#007bff',
-                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Anterior
-                  </button>
-                  
-                  <span style={{
-                    padding: '8px 12px',
-                    backgroundColor: '#007bff',
-                    color: '#fff',
-                    borderRadius: '4px',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}>
-                    {currentPage} de {totalPages}
-                  </span>
-                  
-                  <button
-                    onClick={() => setJornadasCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === totalPages ? '#f8f9fa' : '#fff',
-                      color: currentPage === totalPages ? '#6c757d' : '#007bff',
-                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Próxima
-                  </button>
-                  
-                  <button
-                    onClick={() => setJornadasCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                    style={{
-                      padding: '8px 12px',
-                      border: '1px solid #dee2e6',
-                      backgroundColor: currentPage === totalPages ? '#f8f9fa' : '#fff',
-                      color: currentPage === totalPages ? '#6c757d' : '#007bff',
-                      cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Última
-                  </button>
+                <div style={{ fontSize: '14px', color: '#6c757d' }}>
+                  Total de {totalItems} registros
                 </div>
               </div>
             );
@@ -2248,7 +2155,6 @@ export default function Admin() {
             <button
               onClick={() => {
                 setJornadasDataLoaded(false);
-                setJornadasCurrentPage(1);
               }}
               style={{
                 padding: '10px 20px',
