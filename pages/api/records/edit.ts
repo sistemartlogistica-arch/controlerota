@@ -56,6 +56,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const db = admin.firestore();
       
       await db.collection('registros').doc(id).delete();
+      
+      // Limpar cache de registros após deleção
+      clearRecordsCache();
+      
       res.status(200).json({ success: true });
     } catch (error) {
       console.error('Erro ao deletar registro:', error);
