@@ -11,11 +11,27 @@ import RegistrosCount from "@/components/RegistrosCount";
 // Função utilitária para formatar data para input
 const formatDateForInput = (dateString: string) => {
   if (!dateString) return "";
-  const date = new Date(dateString);
-  // Ajustar para fuso horário brasileiro (UTC-3)
-  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
-  const localDate = new Date(date.getTime() - offsetMs);
-  return localDate.toISOString().slice(0, 16);
+  
+  // Se a data já tem offset de fuso horário, usar diretamente
+  if (dateString.includes('Z') || dateString.includes('+') || dateString.includes('-', 10)) {
+    const date = new Date(dateString);
+    // Converter para o formato local sem alterar o horário
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+  
+  // Se não tem offset, assumir que é UTC e converter para local
+  const date = new Date(dateString + 'Z');
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 function RotaManagement() {
@@ -3684,6 +3700,12 @@ export default function Admin() {
                       }
 
                       return true;
+                    })
+                    .sort((a: any, b: any) => {
+                      // Ordenar por data de abertura (mais recentes primeiro)
+                      const dateA = new Date(a.abertura?.dataHora || '1900-01-01');
+                      const dateB = new Date(b.abertura?.dataHora || '1900-01-01');
+                      return dateB.getTime() - dateA.getTime();
                     })
                     .map((record: any) => {
                       const user = users.find((u) => u.uid === record.userId);
