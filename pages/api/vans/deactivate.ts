@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearVansCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
@@ -18,6 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await db.collection('vans').doc(id).update({
       ativa: false
     });
+
+    // Limpar cache de vans após desativação
+    clearVansCache();
 
     res.status(200).json({ success: true });
   } catch (error) {

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearRotasCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {
@@ -19,6 +20,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ativa: false,
       desativadaEm: new Date().toISOString()
     });
+
+    // Limpar cache de rotas após desativação
+    clearRotasCache();
 
     res.status(200).json({ message: 'Rota desativada com sucesso' });
   } catch (error: any) {

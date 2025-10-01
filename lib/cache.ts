@@ -12,3 +12,29 @@ export const clearRecordsCache = () => {
   Object.keys(openRecordsCache).forEach(key => delete openRecordsCache[key]);
   console.log('Cache de registros limpo');
 };
+
+// Função para limpar cache de vans
+export const clearVansCache = () => {
+  if (typeof global !== 'undefined') {
+    (global as any).vansCache = null;
+    (global as any).vansCacheTime = 0;
+  }
+  console.log('Cache de vans limpo');
+};
+
+// Função para limpar cache de rotas
+export const clearRotasCache = () => {
+  if (typeof global !== 'undefined') {
+    (global as any).rotasCache = null;
+    (global as any).rotasCacheTime = 0;
+  }
+  console.log('Cache de rotas limpo');
+};
+
+// Função para limpar todos os caches
+export const clearAllCaches = () => {
+  clearRecordsCache();
+  clearVansCache();
+  clearRotasCache();
+  console.log('Todos os caches limpos');
+};

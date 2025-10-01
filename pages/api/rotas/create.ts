@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearRotasCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -23,6 +24,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     const docRef = await db.collection('rotas').add(rotaData);
+    
+    // Limpar cache de rotas após criação
+    clearRotasCache();
     
     res.status(201).json({ id: docRef.id, ...rotaData });
   } catch (error: any) {

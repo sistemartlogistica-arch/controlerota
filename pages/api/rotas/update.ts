@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearRotasCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
@@ -19,6 +20,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       origem,
       destino
     });
+
+    // Limpar cache de rotas após atualização
+    clearRotasCache();
 
     res.status(200).json({ message: 'Rota atualizada com sucesso' });
   } catch (error) {
