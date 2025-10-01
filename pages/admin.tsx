@@ -7,6 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import RegistroModalCompleto from "@/components/newRegisterModal";
 import RegistrosCount from "@/components/RegistrosCount";
+import toast from "react-hot-toast";
 
 // Função utilitária para formatar data para input
 const formatDateForInput = (dateString: string) => {
@@ -602,6 +603,11 @@ export default function Admin() {
   };
 
   const handleRegistroCriado = async (registro: any) => {
+    // Mostrar toast de sucesso
+    toast.success('Registro inserido com sucesso!', {
+      duration: 3000,
+    });
+    
     // Adicionar o registro imediatamente à lista para feedback visual
     setRecords((prevRecords) => {
       const newRecords = [registro, ...prevRecords];
@@ -633,6 +639,7 @@ export default function Admin() {
         updateRecordsCount();
       } catch (error) {
         console.error('Erro ao sincronizar dados:', error);
+        toast.error('Erro ao sincronizar dados com o servidor');
       }
     }, 1000); // Aguardar 1 segundo para não sobrecarregar
   };
