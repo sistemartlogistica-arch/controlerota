@@ -109,13 +109,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         query = query.where('fechamento', '==', null) as any;
       }
       
-      // Adicionar ordenação
-      query = query.orderBy('abertura.dataHora', 'desc') as any;
+      // Adicionar ordenação apenas se não há filtro por userId (para evitar índice composto)
+      if (!userId) {
+        query = query.orderBy('abertura.dataHora', 'asc') as any;
+      }
       
       // Se getAll=true, retornar todos os registros (sem paginação)
       if (getAll === 'true') {
         const snapshot = await query.get();
         let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        
+        // Ordenar por data se não foi ordenado no Firestore
+        if (userId) {
+          records = records.sort((a, b) => {
+            const dateA = new Date(a.abertura?.dataHora || 0);
+            const dateB = new Date(b.abertura?.dataHora || 0);
+            return dateA.getTime() - dateB.getTime(); // Crescente
+          });
+        }
         
         // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
         if (!userId) {
@@ -149,6 +160,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       const snapshot = await query.get();
       let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      
+      // Ordenar por data se não foi ordenado no Firestore
+      if (userId) {
+        records = records.sort((a, b) => {
+          const dateA = new Date(a.abertura?.dataHora || 0);
+          const dateB = new Date(b.abertura?.dataHora || 0);
+          return dateA.getTime() - dateB.getTime(); // Crescente
+        });
+      }
       
       // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
       if (!userId) {
