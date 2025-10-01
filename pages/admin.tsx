@@ -557,7 +557,6 @@ export default function Admin() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleRegistroCriado = (registro: any) => {
-    console.log("Registro criado:", registro);
     setRecords((prevRecords) => [registro, ...prevRecords]);
     loadRecords(); // Recarregar registros para garantir sincronização
   };
@@ -1106,9 +1105,6 @@ export default function Admin() {
     // Usar allRecords (já filtrados por usuário se aplicável)
     const recordsToFilter = allRecords.length > 0 ? allRecords : records;
     
-    // Debug: verificar quantos registros temos antes do filtro
-    console.log('Total de registros antes do filtro:', recordsToFilter.length);
-    console.log('Filtros aplicados:', recordFilters);
     
     const filteredRecords = recordsToFilter.filter((record: any) => {
       // Filtro por data (principal filtro após usuário)
@@ -1149,16 +1145,12 @@ export default function Admin() {
       return true;
     });
 
-    // Debug: verificar quantos registros passaram no filtro
-    console.log('Registros após filtro:', filteredRecords.length);
-
     // Aplicar paginação se não estiver no modo "mostrar todos"
     let paginatedRecords = filteredRecords;
     if (!showAllRecords) {
       const startIndex = (currentPage - 1) * recordsPerPage;
       const endIndex = startIndex + recordsPerPage;
       paginatedRecords = filteredRecords.slice(startIndex, endIndex);
-      console.log('Registros após paginação:', paginatedRecords.length);
     }
 
     const data = [];
