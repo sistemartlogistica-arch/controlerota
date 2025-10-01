@@ -31,10 +31,51 @@ export const clearRotasCache = () => {
   console.log('Cache de rotas limpo');
 };
 
+// Cache para usuários ativos
+export const activeUsersCache: { [key: string]: { data: string[]; time: number } } = {};
+export const ACTIVE_USERS_CACHE_DURATION = 30 * 60 * 1000; // 30 minutos
+
+// Função para buscar usuários ativos de forma eficiente
+export const getActiveUserIds = async (db: any): Promise<string[]> => {
+  const cacheKey = 'active_users';
+  const now = Date.now();
+  
+  // Verificar cache
+  if (activeUsersCache[cacheKey] && (now - activeUsersCache[cacheKey].time) < ACTIVE_USERS_CACHE_DURATION) {
+    return activeUsersCache[cacheKey].data;
+  }
+  
+  // Buscar usuários ativos
+  const activeUsersSnapshot = await db.collection('usuarios')
+    .where('ativo', '==', true)
+    .get();
+  const activeUserIds = activeUsersSnapshot.docs.map((doc: any) => doc.id);
+  
+  // Buscar usuários sem campo 'ativo' (considerados ativos por padrão)
+  const allUsersSnapshot = await db.collection('usuarios').get();
+  const usersWithoutActiveField = allUsersSnapshot.docs
+    .filter((doc: any) => !doc.data().hasOwnProperty('ativo'))
+    .map((doc: any) => doc.id);
+  
+  const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+  
+  // Atualizar cache
+  activeUsersCache[cacheKey] = { data: allActiveUserIds, time: now };
+  
+  return allActiveUserIds;
+};
+
+// Função para limpar cache de usuários ativos
+export const clearActiveUsersCache = () => {
+  Object.keys(activeUsersCache).forEach(key => delete activeUsersCache[key]);
+  console.log('Cache de usuários ativos limpo');
+};
+
 // Função para limpar todos os caches
 export const clearAllCaches = () => {
   clearRecordsCache();
   clearVansCache();
   clearRotasCache();
+  clearActiveUsersCache();
   console.log('Todos os caches limpos');
 };

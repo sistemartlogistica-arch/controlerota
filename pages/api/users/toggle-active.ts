@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearActiveUsersCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -26,6 +27,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ativo: ativo,
       atualizadoEm: new Date().toISOString()
     });
+
+    // Limpar cache de usuários ativos após alteração
+    clearActiveUsersCache();
 
     res.status(200).json({ 
       success: true, 
