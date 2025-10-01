@@ -26,20 +26,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const updates: any = {};
       
       // Verificar se o registro foi criado antes da data de corte
-      const recordCreatedAt = record.createdAt ? new Date(record.createdAt) : 
-                             record.abertura?.dataHora ? new Date(record.abertura.dataHora) : 
+      const recordCreatedAt = (record as any).createdAt ? new Date((record as any).createdAt) : 
+                             (record as any).abertura?.dataHora ? new Date((record as any).abertura.dataHora) : 
                              new Date('1900-01-01'); // Fallback para registros muito antigos
       
       const isOldRecord = recordCreatedAt < cutoffDate;
       
       // Verificar data de abertura
-      if (record.abertura?.dataHora && isOldRecord) {
-        const aberturaDate = new Date(record.abertura.dataHora);
+      if ((record as any).abertura?.dataHora && isOldRecord) {
+        const aberturaDate = new Date((record as any).abertura.dataHora);
         
         // Verificar se a data não tem offset de fuso horário (está em UTC)
-        const isUTC = !record.abertura.dataHora.includes('Z') && 
-                     !record.abertura.dataHora.includes('+') && 
-                     !record.abertura.dataHora.includes('-', 10);
+        const isUTC = !(record as any).abertura.dataHora.includes('Z') && 
+                     !(record as any).abertura.dataHora.includes('+') && 
+                     !(record as any).abertura.dataHora.includes('-', 10);
         
         if (isUTC) {
           // Adicionar 3 horas para converter de UTC para horário brasileiro
@@ -50,12 +50,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       // Verificar data de fechamento
-      if (record.fechamento?.dataHora && isOldRecord) {
-        const fechamentoDate = new Date(record.fechamento.dataHora);
+      if ((record as any).fechamento?.dataHora && isOldRecord) {
+        const fechamentoDate = new Date((record as any).fechamento.dataHora);
         
-        const isUTC = !record.fechamento.dataHora.includes('Z') && 
-                     !record.fechamento.dataHora.includes('+') && 
-                     !record.fechamento.dataHora.includes('-', 10);
+        const isUTC = !(record as any).fechamento.dataHora.includes('Z') && 
+                     !(record as any).fechamento.dataHora.includes('+') && 
+                     !(record as any).fechamento.dataHora.includes('-', 10);
         
         if (isUTC) {
           const fechamentoLocal = new Date(fechamentoDate.getTime() + (3 * 60 * 60 * 1000));
@@ -66,17 +66,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       if (needsFix) {
         recordsToFix.push({
-          id: record.id,
+          id: (record as any).id,
           createdAt: recordCreatedAt.toISOString(),
           isOldRecord,
           original: {
-            abertura: record.abertura?.dataHora,
-            fechamento: record.fechamento?.dataHora
+            abertura: (record as any).abertura?.dataHora,
+            fechamento: (record as any).fechamento?.dataHora
           },
           updates,
           fixed: {
-            abertura: updates['abertura.dataHora'] || record.abertura?.dataHora,
-            fechamento: updates['fechamento.dataHora'] || record.fechamento?.dataHora
+            abertura: updates['abertura.dataHora'] || (record as any).abertura?.dataHora,
+            fechamento: updates['fechamento.dataHora'] || (record as any).fechamento?.dataHora
           }
         });
         
@@ -86,8 +86,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           updates['timezoneMigratedAt'] = new Date().toISOString();
           updates['timezoneMigratedBy'] = 'system';
           
-          await db.collection('registros').doc(record.id).update(updates);
-          fixedRecords.push(record.id);
+          await db.collection('registros').doc((record as any).id).update(updates);
+          fixedRecords.push((record as any).id);
         }
       }
     }
