@@ -687,18 +687,24 @@ export default function Admin() {
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(50);
   const [showAllRecords, setShowAllRecords] = useState(false);
+  const [allRecords, setAllRecords] = useState<any[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   const loadRecords = async () => {
     let recordsData;
     
-    if (showAllRecords) {
-      // Usar API para buscar todos os registros
-      const response = await fetch('/api/records?getAll=true');
+    // Se há filtro por usuário, carregar apenas registros desse usuário
+    if (recordFilters.selectedUser) {
+      const response = await fetch(`/api/records?userId=${recordFilters.selectedUser}&getAll=true`);
       recordsData = await response.json();
     } else {
-      // Usar função local com paginação
-      recordsData = await getAllRecords(currentPage, recordsPerPage);
+      // Caso contrário, carregar todos os registros
+      const response = await fetch('/api/records?getAll=true');
+      recordsData = await response.json();
     }
+    
+    setAllRecords(recordsData);
+    setTotalRecords(recordsData.length);
     
     // Ordenar por nome do usuário
     const sortedRecords = recordsData.sort((a: any, b: any) => {
@@ -717,6 +723,11 @@ export default function Admin() {
       loadRecords();
     }
   }, [currentPage, users, showAllRecords]);
+
+  // Resetar página quando filtros mudarem
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [recordFilters]);
 
   const loadVans = async () => {
     try {
@@ -1092,14 +1103,15 @@ export default function Admin() {
   };
 
   const getFilteredData = () => {
-    const filteredRecords = records.filter((record: any) => {
-      if (
-        recordFilters.selectedUser &&
-        record.userId !== recordFilters.selectedUser
-      ) {
-        return false;
-      }
-
+    // Usar allRecords (já filtrados por usuário se aplicável)
+    const recordsToFilter = allRecords.length > 0 ? allRecords : records;
+    
+    // Debug: verificar quantos registros temos antes do filtro
+    console.log('Total de registros antes do filtro:', recordsToFilter.length);
+    console.log('Filtros aplicados:', recordFilters);
+    
+    const filteredRecords = recordsToFilter.filter((record: any) => {
+      // Filtro por data (principal filtro após usuário)
       if (recordFilters.startDate || recordFilters.endDate) {
         const recordDate = new Date(record.abertura?.dataHora);
 
@@ -1119,10 +1131,12 @@ export default function Admin() {
         }
       }
 
+      // Filtro por registros abertos
       if (recordFilters.showOnlyOpen && record.fechamento) {
         return false;
       }
 
+      // Filtro por rota
       if (recordFilters.rotaSearch) {
         const rota = `${record.origem || ""} ${
           record.destino || ""
@@ -1134,6 +1148,18 @@ export default function Admin() {
 
       return true;
     });
+
+    // Debug: verificar quantos registros passaram no filtro
+    console.log('Registros após filtro:', filteredRecords.length);
+
+    // Aplicar paginação se não estiver no modo "mostrar todos"
+    let paginatedRecords = filteredRecords;
+    if (!showAllRecords) {
+      const startIndex = (currentPage - 1) * recordsPerPage;
+      const endIndex = startIndex + recordsPerPage;
+      paginatedRecords = filteredRecords.slice(startIndex, endIndex);
+      console.log('Registros após paginação:', paginatedRecords.length);
+    }
 
     const data = [];
     data.push([
@@ -1149,7 +1175,7 @@ export default function Admin() {
       "Diário",
     ]);
 
-    filteredRecords.forEach((record) => {
+    paginatedRecords.forEach((record) => {
       const user = users.find((u) => u.uid === record.userId);
       const distancia =
         record.fechamento?.kmFinal && record.abertura?.kmInicial
@@ -3797,13 +3823,13 @@ export default function Admin() {
                     Anterior
                   </button>
                   <span>
-                    Página {currentPage}
+                    Página {currentPage} - {getFilteredData().data.length - 1} de {getFilteredData().filteredRecords.length} registros
                   </span>
                   <button
                     onClick={() =>
                       setCurrentPage(currentPage + 1)
                     }
-                    disabled={records.length < recordsPerPage}
+                    disabled={currentPage * recordsPerPage >= getFilteredData().filteredRecords.length}
                     className="btn-secondary"
                   >
                     Próxima
@@ -3824,7 +3850,7 @@ export default function Admin() {
                     color: "#2c5aa0",
                   }}
                 >
-                  <strong>Modo Completo Ativo:</strong> Exibindo todos os {records.length} registros. 
+                  <strong>Modo Completo Ativo:</strong> Exibindo {getFilteredData().filteredRecords.length} de {totalRecords} registros. 
                   <br />
                   <small>⚠️ Nota: Este modo consome mais recursos do Firestore.</small>
                 </div>
