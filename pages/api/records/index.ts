@@ -1,9 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
-
-// Cache para registros - mais agressivo para economizar cota
-const recordsCache: { [key: string]: { data: any; time: number } } = {};
-const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos para registros
+import { recordsCache, CACHE_DURATION, clearRecordsCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
@@ -76,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       // Limpar cache de registros
-      Object.keys(recordsCache).forEach(key => delete recordsCache[key]);
+      clearRecordsCache();
       
       res.status(201).json({ id: docRef.id });
     } catch (error: any) {

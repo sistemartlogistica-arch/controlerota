@@ -1,9 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
-
-// Cache para registros abertos
-const openRecordsCache: { [key: string]: { data: any; time: number } } = {};
-const CACHE_DURATION = 2 * 60 * 1000; // 2 minutos para registros abertos (mais frequente)
+import { openRecordsCache, OPEN_CACHE_DURATION } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -17,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   
   // Verificar cache
   const now = Date.now();
-  if (openRecordsCache[cacheKey] && (now - openRecordsCache[cacheKey].time) < CACHE_DURATION) {
+  if (openRecordsCache[cacheKey] && (now - openRecordsCache[cacheKey].time) < OPEN_CACHE_DURATION) {
     return res.status(200).json(openRecordsCache[cacheKey].data);
   }
   

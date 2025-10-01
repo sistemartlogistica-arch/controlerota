@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../lib/firebaseAdmin';
+import { clearRecordsCache } from '../../../lib/cache';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'PUT') {
@@ -35,6 +36,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       await db.collection('registros').doc(id).update(updateData);
+
+      // Limpar cache de registros após edição
+      clearRecordsCache();
 
       res.status(200).json({ success: true });
     } catch (error) {
