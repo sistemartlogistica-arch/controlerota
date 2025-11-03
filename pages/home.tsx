@@ -98,7 +98,8 @@ export default function Home() {
  
   useEffect(() => {
     if (userTipo === 'copiloto' && openRecord) {
-      const interval = setInterval(loadVans, 5000); // Atualizar a cada 5 segundos
+      // Reduzido para 30 segundos para reduzir consumo (3800+ registros no sistema)
+      const interval = setInterval(loadVans, 30 * 1000); // Atualizar a cada 30 segundos
       return () => clearInterval(interval);
     }
   }, [userTipo, openRecord]);
