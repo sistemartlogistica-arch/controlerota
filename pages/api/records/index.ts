@@ -111,30 +111,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         query = query.orderBy('abertura.dataHora', 'asc') as any;
       }
       
-      // Se getAll=true, retornar todos os registros (sem paginação)
+      // Se getAll=true, retornar todos os registros (com tratamento de erro RESOURCE_EXHAUSTED)
       if (getAll === 'true') {
-        const snapshot = await query.get();
-        let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-        
-        // Ordenar por data se não foi ordenado no Firestore
-        if (userId) {
-          records = records.sort((a, b) => {
-            const dateA = new Date(a.abertura?.dataHora || 0);
-            const dateB = new Date(b.abertura?.dataHora || 0);
-            return dateA.getTime() - dateB.getTime(); // Crescente
-          });
+        try {
+          const snapshot = await query.get();
+          let records = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+          
+          // Ordenar por data se não foi ordenado no Firestore
+          if (userId) {
+            records = records.sort((a, b) => {
+              const dateA = new Date(a.abertura?.dataHora || 0);
+              const dateB = new Date(b.abertura?.dataHora || 0);
+              return dateA.getTime() - dateB.getTime(); // Crescente
+            });
+          }
+          
+          // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
+          if (!userId) {
+            try {
+              const activeUserIds = await getActiveUserIds(db);
+              records = records.filter(record => activeUserIds.includes(record.userId));
+            } catch (error) {
+              console.error('Erro ao filtrar usuários ativos:', error);
+              // Continuar sem filtro em caso de erro
+            }
+          }
+          
+          // Atualizar cache (cache curto mantém tempo real + invalidação automática)
+          recordsCache[cacheKey] = { data: records, time: now };
+          
+          return res.status(200).json(records);
+        } catch (error: any) {
+          // Tratamento específico para RESOURCE_EXHAUSTED
+          if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+            console.error('Cota excedida ao buscar registros. Retornando cache:', error);
+            
+            // Tentar retornar cache mesmo se expirado (fallback inteligente)
+            if (recordsCache[cacheKey]) {
+              const cacheAge = now - recordsCache[cacheKey].time;
+              const maxCacheAge = 10 * 60 * 1000; // Aceitar cache até 10 minutos quando há erro
+              
+              if (cacheAge < maxCacheAge) {
+                console.log(`Retornando cache (idade: ${Math.round(cacheAge / 1000)}s) devido a RESOURCE_EXHAUSTED`);
+                return res.status(200).json(recordsCache[cacheKey].data);
+              }
+            }
+            
+            // Se não tem cache ou cache muito antigo, retornar erro mais amigável
+            return res.status(503).json({ 
+              error: 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.',
+              retryAfter: 60 
+            });
+          }
+          
+          // Outros erros
+          console.error('Erro ao buscar registros:', error);
+          return res.status(400).json({ error: 'Failed to fetch records', details: error.message });
         }
-        
-        // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
-        if (!userId) {
-          const activeUserIds = await getActiveUserIds(db);
-          records = records.filter(record => activeUserIds.includes(record.userId));
-        }
-        
-        // Atualizar cache
-        recordsCache[cacheKey] = { data: records, time: now };
-        
-        return res.status(200).json(records);
       }
       
       // Paginação normal
@@ -158,8 +191,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
       if (!userId) {
-        const activeUserIds = await getActiveUserIds(db);
-        records = records.filter(record => activeUserIds.includes(record.userId));
+        try {
+          const activeUserIds = await getActiveUserIds(db);
+          records = records.filter(record => activeUserIds.includes(record.userId));
+        } catch (error) {
+          console.error('Erro ao filtrar usuários ativos:', error);
+          // Continuar sem filtro em caso de erro
+        }
       }
       
       // Atualizar cache
