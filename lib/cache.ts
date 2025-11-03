@@ -3,8 +3,13 @@
 export const recordsCache: { [key: string]: { data: any; time: number } } = {};
 export const openRecordsCache: { [key: string]: { data: any; time: number } } = {};
 
-export const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos para registros
-export const OPEN_CACHE_DURATION = 2 * 60 * 1000; // 2 minutos para registros abertos
+// Estratégia de cache inteligente:
+// - Cache curto para dados que precisam ser atualizados frequentemente
+// - Cache médio para listas completas (que já são invalidadas quando há mudanças)
+// - Cache longo apenas quando RESOURCE_EXHAUSTED ocorrer (fallback)
+
+export const CACHE_DURATION = 2 * 60 * 1000; // 2 minutos para registros (mantém tempo real)
+export const OPEN_CACHE_DURATION = 30 * 1000; // 30 segundos para registros abertos (tempo real)
 
 // Função para limpar todos os caches de registros
 export const clearRecordsCache = () => {
@@ -40,7 +45,7 @@ export const getActiveUserIds = async (db: any): Promise<string[]> => {
   const cacheKey = 'active_users';
   const now = Date.now();
   
-  // Verificar cache
+  // Verificar cache (usuários mudam pouco, cache mais longo é OK)
   if (activeUsersCache[cacheKey] && (now - activeUsersCache[cacheKey].time) < ACTIVE_USERS_CACHE_DURATION) {
     return activeUsersCache[cacheKey].data;
   }

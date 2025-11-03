@@ -40,8 +40,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       count: count
     });
 
-  } catch (error) {
-   
+  } catch (error: any) {
+    // Tratamento específico para RESOURCE_EXHAUSTED
+    if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+      console.error('Cota excedida ao contar registros:', error);
+      // Retornar erro mais amigável
+      return res.status(503).json({ 
+        error: 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.',
+        retryAfter: 60 
+      });
+    }
+    
     console.error('Erro ao contar registros:', error);
     
     res.status(500).json({

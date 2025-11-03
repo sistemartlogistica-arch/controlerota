@@ -9,7 +9,7 @@ if (typeof global !== 'undefined') {
   }
 }
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos (reduzido para melhor responsividade)
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos (vans mudam pouco, mas não muito longo)
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -46,6 +46,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.status(200).json(vans);
   } catch (error: any) {
+    // Tratamento específico para RESOURCE_EXHAUSTED
+    if (error.message && error.message.includes('RESOURCE_EXHAUSTED')) {
+      console.error('Cota excedida ao listar vans. Retornando cache:', error);
+      // Tentar retornar cache mesmo se expirado
+      if ((global as any).vansCache) {
+        return res.status(200).json((global as any).vansCache);
+      }
+      return res.status(503).json({ 
+        error: 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.',
+        retryAfter: 60 
+      });
+    }
     console.error('Erro ao listar vans:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }

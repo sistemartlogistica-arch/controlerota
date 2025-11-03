@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy, limit, startAfter } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, orderBy } from 'firebase/firestore';
 
 export const createRecord = async (userId: string, kmInicial: number, dataHora?: string) => {
   return await addDoc(collection(db, 'registros'), {
@@ -31,52 +31,36 @@ export const getOpenRecord = async (userId: string) => {
 };
 
 export const getAllRecords = async (page = 1, pageSize = 100) => {
-  const records: any[] = [];
   const pageNum = parseInt(page.toString()) || 1;
   const limitNum = parseInt(pageSize.toString()) || 100;
-  const offset = (pageNum - 1) * limitNum;
 
-  let q = query(
+  // OTIMIZAÇÃO: Buscar todos os registros uma vez (sem paginação recursiva)
+  // A paginação será aplicada em memória após filtrar por usuários ativos
+  const q = query(
     collection(db, 'registros'),
-    orderBy('abertura.dataHora', 'desc'),
-    limit(limitNum)
+    orderBy('abertura.dataHora', 'desc')
   );
-
-  if (offset > 0) {
-    // Para paginação, precisamos buscar documentos anteriores
-    let tempQuery = query(
-      collection(db, 'registros'),
-      orderBy('abertura.dataHora', 'desc'),
-      limit(offset)
-    );
-    
-    const tempSnapshot = await getDocs(tempQuery);
-    if (!tempSnapshot.empty) {
-      const lastDoc = tempSnapshot.docs[tempSnapshot.docs.length - 1];
-      q = query(q, startAfter(lastDoc));
-    }
-  }
 
   const snapshot = await getDocs(q);
   let allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // Filtrar apenas registros de usuários ativos (client-side para evitar índices complexos)
-  const activeUsersQuery = query(
-    collection(db, 'usuarios'),
-    where('ativo', '==', true)
-  );
-  const activeUsersSnapshot = await getDocs(activeUsersQuery);
-  const activeUserIds = activeUsersSnapshot.docs.map(doc => doc.id);
-  
-  // Também incluir usuários que não têm o campo 'ativo' definido (usuários existentes)
+  // OTIMIZAÇÃO: UMA ÚNICA BUSCA de usuários (eliminando a redundância de duas buscas)
+  // Buscar todos os usuários de uma vez e filtrar em memória
   const allUsersSnapshot = await getDocs(collection(db, 'usuarios'));
-  const usersWithoutActiveField = allUsersSnapshot.docs
-    .filter(doc => !doc.data().hasOwnProperty('ativo'))
-    .map(doc => doc.id);
+  const allActiveUserIds = allUsersSnapshot.docs
+    .filter((doc) => {
+      const data = doc.data();
+      // Considerar ativo se não tem campo 'ativo' definido OU se 'ativo' é true
+      return !data.hasOwnProperty('ativo') || data.ativo === true;
+    })
+    .map((doc) => doc.id);
   
-  const allActiveUserIds = [...activeUserIds, ...usersWithoutActiveField];
+  // Filtrar registros de usuários ativos
   const filteredRecords = allRecords.filter((record: any) => allActiveUserIds.includes(record.userId));
-  records.push(...filteredRecords);
+  
+  // Aplicar paginação em memória (mais eficiente que buscar documentos anteriores recursivamente)
+  const offset = (pageNum - 1) * limitNum;
+  const paginatedRecords = filteredRecords.slice(offset, offset + limitNum);
 
-  return records;
+  return paginatedRecords;
 };
