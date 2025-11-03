@@ -2295,7 +2295,7 @@ export default function Admin() {
     // Verificar cooldown (10 segundos)
     if (now - lastRefreshTime < REFRESH_COOLDOWN) {
       const remainingSeconds = Math.ceil((REFRESH_COOLDOWN - (now - lastRefreshTime)) / 1000);
-      showToast(`Aguarde ${remainingSeconds} segundo(s) antes de atualizar novamente`, 'warning', 2000);
+      showToast(`Aguarde ${remainingSeconds} segundo(s) antes de atualizar novamente`, 'info', 2000);
       return;
     }
     
@@ -2310,11 +2310,11 @@ export default function Admin() {
           showToast('Cache limpo com sucesso', 'success', 2000);
         } else {
           console.error('Erro ao limpar cache:', clearCacheResponse.statusText);
-          showToast('Aviso: Não foi possível limpar o cache', 'warning', 2000);
+          showToast('Aviso: Não foi possível limpar o cache', 'info', 2000);
         }
       } catch (error) {
         console.error('Erro ao limpar cache:', error);
-        showToast('Aviso: Erro ao limpar cache', 'warning', 2000);
+        showToast('Aviso: Erro ao limpar cache', 'info', 2000);
         // Continuar mesmo se falhar ao limpar cache
       }
       
