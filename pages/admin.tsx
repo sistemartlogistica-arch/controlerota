@@ -585,6 +585,25 @@ export default function Admin() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [newRecordAdded, setNewRecordAdded] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
+  const [refreshCooldownRemaining, setRefreshCooldownRemaining] = useState<number>(0);
+  const REFRESH_COOLDOWN = 10 * 1000; // 10 segundos de cooldown
+
+  // Atualizar contador de cooldown
+  useEffect(() => {
+    if (lastRefreshTime > 0) {
+      const interval = setInterval(() => {
+        const remaining = Math.max(0, REFRESH_COOLDOWN - (Date.now() - lastRefreshTime));
+        setRefreshCooldownRemaining(remaining);
+        if (remaining === 0) {
+          clearInterval(interval);
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    } else {
+      setRefreshCooldownRemaining(0);
+    }
+  }, [lastRefreshTime]);
 
   // Função para atualizar apenas os registros abertos
   const updateOpenRecords = () => {
@@ -644,13 +663,13 @@ export default function Admin() {
     }, 1000); // Aguardar 1 segundo para não sobrecarregar
   };
 
-  // Atualizar registros em aberto a cada 5 minutos
+  // Atualizar registros em aberto a cada 10 minutos (reduzido frequência devido a 3800+ registros)
   useEffect(() => {
     updateOpenRecords();
     const interval = setInterval(() => {
       loadRecords(); // Recarregar todos os registros
       updateOpenRecords();
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 10 * 60 * 1000); // 10 minutos (era 5 minutos)
 
     return () => clearInterval(interval);
   }, [records]);
@@ -2271,14 +2290,51 @@ export default function Admin() {
   };
 
   const refreshAllData = async () => {
+    const now = Date.now();
+    
+    // Verificar cooldown (10 segundos)
+    if (now - lastRefreshTime < REFRESH_COOLDOWN) {
+      const remainingSeconds = Math.ceil((REFRESH_COOLDOWN - (now - lastRefreshTime)) / 1000);
+      showToast(`Aguarde ${remainingSeconds} segundo(s) antes de atualizar novamente`, 'warning', 2000);
+      return;
+    }
+    
+    setLastRefreshTime(now);
+    setRefreshCooldownRemaining(REFRESH_COOLDOWN);
     setIsRefreshing(true);
     try {
+      // Limpar cache do servidor primeiro
+      try {
+        const clearCacheResponse = await fetch('/api/cache/clear', { method: 'POST' });
+        if (clearCacheResponse.ok) {
+          showToast('Cache limpo com sucesso', 'success', 2000);
+        } else {
+          console.error('Erro ao limpar cache:', clearCacheResponse.statusText);
+          showToast('Aviso: Não foi possível limpar o cache', 'warning', 2000);
+        }
+      } catch (error) {
+        console.error('Erro ao limpar cache:', error);
+        showToast('Aviso: Erro ao limpar cache', 'warning', 2000);
+        // Continuar mesmo se falhar ao limpar cache
+      }
+      
+      // Recarregar todos os dados com cache limpo
       await Promise.all([
         loadUsers(),
         loadRecords(true), // Forçar refresh
-        loadVans()
+        loadVans(),
+        loadRotas()
       ]);
+      updateOpenRecords();
+      updateRecordsCount();
+      updateReportData();
       setCurrentPage(1); // Reset para primeira página
+      
+      // Mostrar toast de sucesso após atualização
+      showToast('Dados atualizados com sucesso!', 'success', 3000);
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+      showToast('Erro ao atualizar dados', 'error', 3000);
     } finally {
       setIsRefreshing(false);
     }
@@ -2963,8 +3019,17 @@ export default function Admin() {
           >
             📚 Ajuda
           </button>
-          <button onClick={refreshAllData} className="btn-primary" disabled={isRefreshing}>
-            {isRefreshing ? '🔄 Atualizando...' : 'Atualizar'}
+          <button 
+            onClick={refreshAllData} 
+            className="btn-primary" 
+            disabled={isRefreshing || refreshCooldownRemaining > 0}
+          >
+            {isRefreshing 
+              ? '🔄 Atualizando...' 
+              : refreshCooldownRemaining > 0
+                ? `Aguarde ${Math.ceil(refreshCooldownRemaining / 1000)}s`
+                : 'Atualizar'
+            }
           </button>
           <button onClick={logout} className="btn-secondary">
             Sair

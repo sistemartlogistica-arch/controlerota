@@ -144,6 +144,8 @@ vite.config.ts.timestamp-*
 backup-*.json
 backup-data.js
 create-admin.js
+createAdmin.js
 DOCUMENTACAO_SISTEMA.md
+RELATORIO_OTIMIZACOES.md
 firestore.rules
 PROPOSTA_COMERCIAL.md
